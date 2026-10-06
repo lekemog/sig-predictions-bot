@@ -53,7 +53,7 @@ class FakeAPI:
         if path.startswith('/orders/'):
             i = int(path.split('/')[2])
             if '/fills' in path:
-                return {'data': [{'quantity': self.orders[i]['quantityFilled']}], 'pagination': {'hasMore': False}}
+                return {'data': [{'quantity': self.orders[i]['quantityFilled'], 'price': self.orders[i]['fillPrice']}], 'pagination': {'hasMore': False}}
             return self.orders[i]
         raise AssertionError(path)
 
@@ -76,7 +76,7 @@ class FakeAPI:
             self.quantities[leg['exchangeId']] += sign * q
             self.cash += sign * q * leg['price']
             oid = len(self.orders) + 1
-            self.orders[oid] = {'open': q < leg['quantity'], 'quantityFilled': q}
+            self.orders[oid] = {'open': q < leg['quantity'], 'quantityFilled': q, 'fillPrice': leg['price']}
             results.append({'index': idx, 'data': {'orderId': oid, 'quantityTraded': q}})
         response = {'results': results} if path.endswith('multi-leg') else results[0]['data']
         self.responses[key] = response
@@ -170,6 +170,12 @@ class TradingTests(unittest.TestCase):
             return d
         self.api.get = get
         with self.assertRaises(Halt): validate_contracts(self.api, self.cfg['baskets'][0])
+
+    def test_bounded_review_preserves_full_portfolio_risk_configuration(self):
+        self.cfg['review_names'] = []
+        self.api.quantities = {'11': -100, '22': -99}
+        with self.assertRaises(Halt): Runner(self.api, self.journal, self.cfg).cycle()
+        self.assertEqual(self.api.calls, [])
 
     def test_deadline_prevents_writes(self):
         plan = self.plan()
