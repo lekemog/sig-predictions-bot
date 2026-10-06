@@ -1,7 +1,7 @@
 name: SIG hourly management
 on:
   schedule:
-    - cron: '37 * * * *'
+    - cron: '17,37,57 * * * *'
   workflow_dispatch:
     inputs:
       mode:
