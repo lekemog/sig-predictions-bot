@@ -86,6 +86,16 @@ class HostedRunner(Runner):
         return super().finish(job)
 
 
+def record_sweep(remote, mode, status, basket_count):
+    marker = {'at': now().isoformat(), 'mode': mode, 'status': status,
+              'basket_count': basket_count}
+    remote.data['last_run'] = marker
+    if status == 'success':
+        remote.data['last_successful_sweep'] = marker
+        if mode == 'live':
+            remote.data['last_successful_live_sweep'] = marker
+
+
 def main():
     if now() >= END:
         print('Trading cutoff reached; no API orders or further reviews.')
@@ -108,10 +118,12 @@ def main():
                     live=os.environ.get('SIG_MODE', 'dry-run') == 'live')
     try:
         result = runner.cycle()
+        record_sweep(remote, 'live' if runner.live else 'dry-run', 'success', len(config['baskets']))
         journal.event('hosted_result', result)
         print(json.dumps(result, allow_nan=False), flush=True)
     except BaseException:
         # Fail closed. An unresolved job remains in the remote checkpoint.
+        record_sweep(remote, 'live' if runner.live else 'dry-run', 'failure', len(config['baskets']))
         journal.event('hosted_failure', {'at': now().isoformat(), 'message': 'Run failed; review logs and reconcile'})
         raise
     finally:
