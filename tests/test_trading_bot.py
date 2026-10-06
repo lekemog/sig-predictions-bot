@@ -151,6 +151,14 @@ class TradingTests(unittest.TestCase):
         self.assertEqual(p['quantity'], 500)
         self.assertAlmostEqual(p['robust_profit'], 15)
 
+    def test_failed_held_basket_verification_halts_other_entries(self):
+        self.api.quantities = {'11': -100, '22': -100}
+        runner = Runner(self.api, self.journal, self.cfg, True)
+        with patch('trading_bot.basket_plan', side_effect=Halt('changed settlement')):
+            with self.assertRaises(Halt):
+                runner.cycle()
+        self.assertEqual(self.api.calls, [])
+
     def test_default_dry_run_never_writes(self):
         runner = Runner(self.api, self.journal, self.cfg)
         result = runner.submit(self.plan(), self.api.state())
