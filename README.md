@@ -111,6 +111,8 @@ Basket analysis uses joint outcomes rather than multiplying marginal race probab
 python -m unittest discover -s tests -v
 ```
 
-The 28 tests cover probability sensitivity, stale evidence, correlated payoff scenarios, duplicate evidence, depth, reserves, contract mismatches, tick validation, partial fills, failed repairs, lost accepted responses and exact-key replay.
+The 29 tests cover probability sensitivity, stale evidence, correlated payoff scenarios, duplicate evidence, depth, reserves, contract mismatches, tick validation, partial fills, failed repairs, lost accepted responses and exact-key replay.
 
 The suite uses a simulated exchange for execution tests. It validates implementation behavior, not profitability or real-world liquidity. News verification, forecast calibration and directional exit decisions remain research tasks. The runner reviews hourly; it does not claim continuous monitoring or a speed advantage.
+
+I can restrict a review with `review_names` while retaining every basket in the portfolio risk check. Execution receipts reconcile cash changes against actual fills and stop on unexplained costs. Contract labels follow settlement metadata: Nebraska uses `Nonpartisan`; Montana and Rhode Island use `Independent`.

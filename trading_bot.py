@@ -386,6 +386,21 @@ class Runner:
                 after = self.repair(job, after)
             job['after'] = after
             job['cash_change'] = after['cash'] - job['before']['cash']
+            expected_cash_change, filled_shares = 0., 0.
+            for result, leg in zip(results, job['request']['legs']):
+                oid = result['data'].get('orderId')
+                for fill in job.get('fills', {}).get(str(oid), {}).get('data', []):
+                    q = abs(float(fill['quantity']))
+                    expected_cash_change += (1 if leg['action'] == 'sell' else -1) * q * float(fill['price'])
+                    filled_shares += q
+            for repair in job['repairs']:
+                for fill in repair['fills']['data']:
+                    q = abs(float(fill['quantity']))
+                    expected_cash_change += (1 if repair['request']['action'] == 'sell' else -1) * q * float(fill['price'])
+                    filled_shares += q
+            job['observed_extra_cost'] = expected_cash_change - job['cash_change']
+            if (job['observed_extra_cost'] < -.01 or job['observed_extra_cost'] > filled_shares * float(self.config['costs']['fee_per_share']) + .01):
+                raise Halt('Fill/cash costs do not reconcile to verified fee allowance')
             if after['cash'] < RESERVE:
                 raise Halt('Cash reserve breached after fills')
             committed, race_cost, directional = portfolio_risk(after, self.config)
@@ -468,11 +483,16 @@ class Runner:
             raise Halt('Existing resting orders found; no conflicting new placements')
         portfolio_risk(state, self.config)
         plans = []
+        review_names = set(self.config.get('review_names', [b['name'] for b in self.config['baskets']]))
         for basket in self.config['baskets']:
+            if basket['name'] not in review_names:
+                continue
+            self.journal.event('checking', {'basket': basket['name']})
             try:
                 plan = basket_plan(self.api, state, self.config, basket)
                 if plan:
                     plans.append(plan)
+                self.journal.event('screened', {'basket': basket['name'], 'candidate': bool(plan)})
             except Halt as e:
                 self.journal.event('abstain', {'basket': basket['name'], 'reason': str(e)})
         for case in (cases or [])[:3]:
