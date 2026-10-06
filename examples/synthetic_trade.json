@@ -1,0 +1,77 @@
+{
+  "contract": {
+    "market_id": "demo",
+    "exchange_id": "1",
+    "question": "SYNTHETIC: does Candidate A win?",
+    "settlement_rule": "YES if Candidate A wins; NO otherwise. Demonstration only.",
+    "rule_url": "https://example.org/synthetic-rules",
+    "settles_at": "2026-11-04T17:00:00Z",
+    "verified": true
+  },
+  "book": {
+    "exchangeId": "1",
+    "asOf": {
+      "at": "2026-10-06T12:00:00Z"
+    },
+    "asks": [
+      {
+        "price": 0.55,
+        "quantity": 1000
+      }
+    ],
+    "bids": [
+      {
+        "price": 0.54,
+        "quantity": 1000
+      }
+    ]
+  },
+  "forecast": {
+    "kind": "margin_normal",
+    "final_margin_pp": [
+      2,
+      4
+    ],
+    "total_error_sd_pp": [
+      4,
+      6
+    ],
+    "assumptions": "SYNTHETIC sensitivity only; sigma includes common error, not just survey sampling error.",
+    "validation_reference": null,
+    "evidence": [
+      {
+        "url": "https://example.org/synthetic-poll",
+        "claim": "SYNTHETIC: expected final margin2 to4pp, total error4 to6pp",
+        "verified": true,
+        "published_at": "2026-10-06T10:00:00Z",
+        "independence_group": "synthetic-poll"
+      }
+    ]
+  },
+  "trade": {
+    "side": "yes",
+    "quantity": 100,
+    "objective": "settlement",
+    "minimum_edge": 0.05,
+    "thesis": "SYNTHETIC demonstration of a probability calculation",
+    "falsification": "Margin range or uncertainty assumptions fail"
+  },
+  "costs": {
+    "fee_per_share": 0,
+    "slippage_per_share": 0.005,
+    "verified": true,
+    "source": "Synthetic zero-fee fixture"
+  },
+  "risk": {
+    "cash": 100000,
+    "minimum_cash": 75000,
+    "race_exposure": 0,
+    "max_race_loss": 500,
+    "factor_exposure": 0,
+    "max_factor_loss": 2000,
+    "total_exposure": 0,
+    "max_total_loss": 5000
+  },
+  "relations": [],
+  "external_markets": []
+}
