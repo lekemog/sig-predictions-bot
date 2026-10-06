@@ -249,12 +249,22 @@ def basket_plan(api, state, config, basket):
     books = fresh_books(api, basket['legs'])
     n = len(basket['legs'])
     if held > 0:
-        limits = [price_for(books[str(l['exchange_id'])], 'no', 'sell', int(held))[0] for l in basket['legs']]
-        proceeds = held * (sum(limits) - n * allowance)
-        if proceeds >= held * (n - 1):
-            return {'kind': 'basket_exit', 'name': basket['name'], 'action': 'sell', 'quantity': int(held),
-                    'legs': basket['legs'], 'prices': limits, 'value_floor': held * (n - 1),
-                    'net_limit_proceeds': proceeds, 'contracts': contracts}
+        # A thin book must not hide a profitable matched partial exit. Try the
+        # complete holding first, then smaller balanced clips; preserve the hedge.
+        exit_q = int(held)
+        while exit_q > 0:
+            try:
+                limits = [price_for(books[str(l['exchange_id'])], 'no', 'sell', exit_q)[0]
+                          for l in basket['legs']]
+                proceeds = exit_q * (sum(limits) - n * allowance)
+                if proceeds >= exit_q * (n - 1):
+                    return {'kind': 'basket_exit', 'name': basket['name'], 'action': 'sell',
+                            'quantity': exit_q, 'legs': basket['legs'], 'prices': limits,
+                            'value_floor': exit_q * (n - 1), 'net_limit_proceeds': proceeds,
+                            'contracts': contracts}
+            except Halt:
+                pass
+            exit_q //= 2
     # Small default clip sized from displayed depth and surviving edge, not caps.
     q = min(int(basket.get('clip', 100)), 1000)
     while q > 0:
