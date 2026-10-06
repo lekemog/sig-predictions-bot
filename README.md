@@ -55,7 +55,7 @@ Matched hedges are preserved. Price changes alone do not trigger stops on intact
 - bot_config.json: exact contract watchlist and operating controls.
 - .github/workflows/sig-management.yml: scheduled and manual runs.
 
-Python 3.10 or later; standard library only. Run python -m unittest discover -s tests -v. All 38 tests pass, including checkpoint-write failure, fresh-run recovery of an unknown request, duplicate prevention, partial fills, failed repairs, reserves, contract mismatch and cash reconciliation. Tests validate implementation behavior, not trading profitability.
+Python 3.10 or later; standard library only. Run python -m unittest discover -s tests -v. All 39 tests pass, including checkpoint-write failure, fresh-run recovery of an unknown request, duplicate prevention, partial fills, failed repairs, reserves, contract mismatch and cash reconciliation. Tests validate implementation behavior, not trading profitability.
 
 For local use, provide SIG_API_KEY privately in the process environment. python trading_bot.py performs a dry-run; --live enables one execution review; --live --loop repeats hourly on a running machine. Do not run a local live loop alongside the hosted workflow.
 
@@ -64,3 +64,5 @@ A separate read-only hourly health review flags stale successful live sweeps aft
 Public reference review (6 October 2026): PredictionMarketTrader/openthomas illustrates calibration, settled-outcome feedback and bounded sizing; charlieyang1557/polymarket-arb illustrates cancel/fill state machines and negative execution results. Their reported venue-specific performance is not evidence of a SIG election edge. No third-party code is executed or supplied account credentials. Our existing margin-normal sensitivity engine requires a validation reference rather than treating poll vote share as win probability.
 
 Durable checkpoints distinguish successful dry-runs from successful live sweeps; a failed run preserves the previous successful-live timestamp. The read-only health review uses that explicit heartbeat.
+
+If a held basket cannot be verified during its sweep, all new entries halt; the bot records the failed basket rather than silently treating the portfolio as fully managed.
