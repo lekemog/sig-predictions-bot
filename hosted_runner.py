@@ -63,7 +63,10 @@ class DurableJournal(Journal):
     def checkpoint(self):
         jobs = [json.loads(r[0]) for r in self.db.execute('SELECT body FROM jobs ORDER BY updated')]
         pending = [j for j in jobs if j['status'] not in ('done', 'dry_run')]
-        complete = [j for j in jobs if j['status'] in ('done', 'dry_run')][-30:]
+        receipt_fields = ('id', 'status', 'request', 'plan', 'fills', 'created_at',
+                          'cash_change', 'observed_extra_cost')
+        complete = [{k: v for k, v in j.items() if k in receipt_fields}
+                    for j in jobs if j['status'] in ('done', 'dry_run')][-30:]
         rows = list(self.db.execute('SELECT at,kind,body FROM events ORDER BY rowid DESC LIMIT 50'))
         events = [{'at': a, 'kind': k, 'body': json.loads(b)} for a, k, b in reversed(rows)]
         data = dict(self.remote.data, jobs=complete + pending, events=events, updated_at=now().isoformat())
