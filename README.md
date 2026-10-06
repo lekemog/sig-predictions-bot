@@ -1,118 +1,60 @@
 # SIG Predictions Bot
 
-A Python trading system for the SIG Predictions Cup. It combines contract-level pricing checks, probability sensitivity analysis and bounded execution through the competition API.
+A Python trading system for the SIG Predictions Cup. My objective is to find defensible election-market pricing errors while controlling exposure, execution costs and capital lockup.
 
-My objective is to find defensible pricing errors across election markets while controlling exposure, execution costs and capital lockup. The system separates opportunities supported by settlement logic from trades that require a forecast.
+## Hosted operation
 
-## Architecture
+GitHub Actions runs the portfolio manager hourly, at minute 37 UTC. Scheduled runs use live execution; manual runs default to dry-run and offer an explicit live option. GitHub schedules can be delayed. The system is an hourly decision process, not continuous market monitoring.
 
-| Component | Responsibility |
-| --- | --- |
-| `decision_engine.py` | Probability ranges, expected value, joint payoff scenarios and forecast evaluation |
-| `trading_bot.py` | Portfolio reconciliation, opportunity ranking, order submission and partial-fill handling |
-| `sig_snapshot.py` | Read-only, tournament-scoped order-book snapshots |
-| `bot_config.json` | Market watchlist, fee assumptions and operational controls |
-| `private/execution.sqlite` | Persistent order requests, execution results and review history |
+The workflow reads the encrypted repository secret SIG_API_KEY. Credentials stay out of source files and checkpoint records. Validation runs before every portfolio review. The private repository must remain private because its checkpoint includes portfolio and execution information.
 
-Python 3.10 or later is required. The project uses the standard library and runs on Linux or macOS.
-
-## Strategies
-
-### Contract consistency
-
-The runner checks distinct party-winner contracts for the same race, stage, election date and settlement date. For a basket of `n` mutually exclusive outcomes, equal NO positions pay at least `n - 1` per basket under normal settlement. An unlisted winner increases that payout; exhaustive party coverage is not required.
-
-Entries require executable depth and a positive margin after the configured fee allowance and an additional 0.005 per share per leg. The default order size is 100 matched shares per leg, reduced when liquidity or risk limits bind. The minimum robust margin is 1 SUSQie and 0.01 per basket.
-
-Whole-basket exits require net limit proceeds at least equal to the normal-settlement payout floor. Cancellation and N/A outcomes follow refund rules, so the normal-settlement floor is conditional on the contracts resolving normally.
-
-### Forecast-based entries
-
-Directional trades use explicit probability ranges or a final-margin model:
-
-`P(YES) = Phi(expected final margin / total error standard deviation)`
-
-Sensitivity ranges account for uncertainty in the expected margin and total error. They are assumption bounds, not calibrated confidence intervals. Polling vote share is not treated as win probability.
-
-A case must include verified sources, assumptions, a validation reference, a thesis and a falsification condition. The runner refreshes executable prices and portfolio exposure before submitting a trade. Conservative expected value at the limit price must exceed 0.05 per share after costs.
-
-Directional entries are restricted to flat exchanges to protect existing hedges. Unclassified directional exposure is conservatively charged to each proposed race and political factor. Thesis-based exits require a separate research decision; they are not automatically triggered by price changes.
-
-Public news and external market prices are research inputs rather than proof of an informational advantage. News updates require justified likelihood ratios and evidence independence checks. Short-term turnover is excluded from live execution until a separate exit model is validated.
-
-## Risk limits
-
-| Constraint | Maximum or minimum |
-| --- | ---: |
-| Total entry commitments, including pending orders | 25,000 SUSQies |
-| Commitment per hedged race or basket | 5,000 SUSQies |
-| Minimum cash reserve | 75,000 SUSQies |
-| Directional maximum loss per race | 500 SUSQies |
-| Total directional maximum loss | 5,000 SUSQies |
-| Exposure to a shared political factor | 2,000 SUSQies |
-| Partial-fill repair stress-loss budget | 10 SUSQies |
-
-Limits are enforced in code. The runner does not size orders to consume the available ceiling or use price-only stops on intact hedges.
+Only one workflow invocation can execute at a time. The separate chat-based execution schedule is paused to keep a single automated execution owner.
 
 ## Execution and recovery
 
-Every placement request and idempotency key is persisted before the API call. If a response is lost, the runner reconciles account state and retries only the identical stored request with the same key.
+hosted_runner.py restores the durable checkpoint in .bot/state.json into its local SQLite journal. Every order request and idempotency key is synchronously saved back to GitHub before the SIG API call. A failed checkpoint write blocks the following submission. A lost placement response retains the original request; recovery reconciles the account and replays only the identical request and key.
 
-Multi-leg submission is atomic, but fills may be unequal. The runner inspects order fills, cancels resting remainders and reconciles the resulting positions. It unwinds unmatched incremental entries to the smallest filled basket quantity; for unequal exits, it buys back the unmatched portion to restore the hedge.
+Unfinished jobs are always retained. Completed receipt history is bounded; earlier versions remain in Git history. Review events record screening decisions and account reconciliation. The workflow uses its short-lived GITHUB_TOKEN to update the private checkpoint.
 
-Repairs require fresh depth and must remain within the cash reserve and repair budget. An incomplete or uncertain repair halts new placements and retains the evidence for reconciliation.
+Multi-leg submission does not guarantee complete fills. The runner checks fills, cancels resting remainders and repairs unmatched incremental positions within its repair budget. Failed repairs halt further entries. Every completed trade reconciles actual fills against the cash change.
 
-Orders use explicit tournament IDs, tick-aligned limits and expirations of at most 90 seconds, or 60 seconds for repairs. Market orders are prohibited. All expirations are capped at the trading cutoff: **4 November 2026, 17:00 UTC**.
+Set enabled to false in .bot/state.json to prevent subsequent hosted runs from trading. This takes effect on the next run; outstanding orders retain their short expirations. Disable the workflow in Actions to stop scheduled reviews entirely. Do not erase an unresolved execution checkpoint.
 
-A process lock prevents concurrent local runners sharing a journal. Only one execution process should manage the account; this lock does not coordinate separate machines or external trading tools. API calls are paced below 100 reads and 30 writes per minute per process.
+All new submissions stop at 4 November 2026, 17:00 UTC. Limits are tick-aligned and expire within 90 seconds, with 60-second repair limits. Market orders are prohibited.
 
-## Setup
+## Pricing mechanism
 
-Keep `SIG_API_KEY` in the process environment. Never commit credentials, portfolio snapshots or execution journals. For a one-off read-only review, enter the key through a hidden prompt:
+Equal NO holdings in n mutually exclusive party-winner contracts for the same race, stage, date and settlement pay at least n-1 under normal settlement. Unlisted winners increase the payout; the model does not assume exhaustive party coverage. Cancellation and N/A outcomes use refund rules instead.
 
-```sh
-python -c 'import getpass,os,runpy; os.environ["SIG_API_KEY"]=getpass.getpass("SIG key: "); runpy.run_path("trading_bot.py",run_name="__main__")'
-```
+The hosted runner checks all 11 configured baskets, ranks eligible exits before additions and submits at most one new job per hourly run. Whole-basket exits require net proceeds at least equal to their normal-settlement floor. Entries require executable depth and positive profit after documented trading costs plus an extra 0.005 per share per leg. The starting clip is 100 matched shares, reduced when liquidity or risk limits bind.
 
-Before enabling placements, verify the trading fee schedule, set `costs.fee_per_share` and record the source in `bot_config.json`. Set `costs.verified` only after verification. The default configuration leaves this false, so the runner reconciles the portfolio but abstains from placements.
+The fee allowance is zero based on SIG's no-participant-trading-fee documentation and the reconciled historical ledger. Every new fill/cash reconciliation independently checks that assumption.
 
-Run commands from the repository directory:
+The standalone engine also supports probability sensitivity and researched directional cases. Those need timestamped sources, auditable probability ranges and at least 0.05 conservative expected profit per share after costs. The hosted workflow currently executes contract-consistency baskets; it does not autonomously collect polling, calibrate forecasts or run the paper turnover experiment.
 
-```sh
-python trading_bot.py                 # one dry-run review
-python trading_bot.py --live          # one live review
-python trading_bot.py --live --loop   # hourly live reviews
-python trading_bot.py --cases private/researched_cases.json --live
-```
+## Risk limits
 
-The loop requires a running process and durable storage for its journal. GitHub stores the source; it does not automatically host or execute the bot.
+| Constraint | Limit |
+| --- | --- |
+| Total commitments including pending orders | 25,000 SUSQies |
+| Commitment per hedged basket | 5,000 |
+| Cash reserve | At least 75,000 |
+| Directional maximum loss per race | 500 |
+| Total directional maximum loss | 5,000 |
+| Shared political factor exposure | 2,000 |
+| Partial-fill repair loss budget | 10 |
 
-Create `private/STOP` to prevent further submissions. The loop checks it every 10 seconds while waiting. Existing orders expire according to their original limits; the stop file does not instantly cancel them. Do not delete the journal while an order's outcome is unresolved.
+Matched hedges are preserved. Price changes alone do not trigger stops on intact baskets. API requests are paced below 100 reads and 30 writes per minute per runner.
 
-## Research cases
+## Components and validation
 
-Directional inputs follow `examples/synthetic_trade.json`, with an additional `contract.nodes_sha256`: the SHA256 of the current API contract root serialized as sorted-key JSON. The fingerprint protects against changed contract definitions.
+- decision_engine.py: payoff scenarios, executable depth, sensitivity and forecast evaluation.
+- trading_bot.py: reconciliation, bounded planning, fills and repair.
+- hosted_runner.py: durable GitHub checkpoints and hourly execution.
+- sig_snapshot.py: read-only exchange snapshots.
+- bot_config.json: exact contract watchlist and operating controls.
+- .github/workflows/sig-management.yml: scheduled and manual runs.
 
-The standalone engine supports joint basket scenarios and forecast evaluation:
+Python 3.10 or later; standard library only. Run python -m unittest discover -s tests -v. All 32 tests pass, including checkpoint-write failure, fresh-run recovery of an unknown request, duplicate prevention, partial fills, failed repairs, reserves, contract mismatch and cash reconciliation. Tests validate implementation behavior, not trading profitability.
 
-```sh
-python decision_engine.py private/case.json --journal private/audit.sqlite
-python decision_engine.py examples/synthetic_basket.json --mode basket --as-of 2026-10-06T12:00:10Z
-python decision_engine.py private/resolved_forecasts.json --mode calibration
-```
-
-Use `--as-of` only for replay or synthetic examples. Live decisions require current evidence. The examples contain invented data and are not election forecasts.
-
-Basket analysis uses joint outcomes rather than multiplying marginal race probabilities. Include third-party wins, cancellation and refunds. Forecast evaluation reports Brier scores for timestamped predictions made before resolution; comparisons should use chronological out-of-sample data and matching baselines.
-
-## Validation
-
-```sh
-python -m unittest discover -s tests -v
-```
-
-The 29 tests cover probability sensitivity, stale evidence, correlated payoff scenarios, duplicate evidence, depth, reserves, contract mismatches, tick validation, partial fills, failed repairs, lost accepted responses and exact-key replay.
-
-The suite uses a simulated exchange for execution tests. It validates implementation behavior, not profitability or real-world liquidity. News verification, forecast calibration and directional exit decisions remain research tasks. The runner reviews hourly; it does not claim continuous monitoring or a speed advantage.
-
-I can restrict a review with `review_names` while retaining every basket in the portfolio risk check. Execution receipts reconcile cash changes against actual fills and stop on unexplained costs. Contract labels follow settlement metadata: Nebraska uses `Nonpartisan`; Montana and Rhode Island use `Independent`.
+For local use, provide SIG_API_KEY privately in the process environment. python trading_bot.py performs a dry-run; --live enables one execution review; --live --loop repeats hourly on a running machine. Do not run a local live loop alongside the hosted workflow.
