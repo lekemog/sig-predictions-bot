@@ -276,7 +276,8 @@ def basket_plan(api, state, config, basket):
         spend = q * (sum(limits) + n * allowance)
         profit = q * (n - 1) - spend
         if profit < max(1., q * .01):
-            return None
+            q //= 2
+            continue
         if (committed + spend <= MAX_COMMITTED and costs[basket['name']] + spend <= BASKET_CAP
                 and state['cash'] - spend >= RESERVE):
             return {'kind': 'basket_entry', 'name': basket['name'], 'action': 'buy', 'quantity': q,
