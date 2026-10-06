@@ -139,6 +139,18 @@ class TradingTests(unittest.TestCase):
         self.assertEqual(p['kind'], 'basket_exit')
         self.assertEqual(p['quantity'], 50)
 
+    def test_deep_entry_price_does_not_hide_smaller_profitable_clip(self):
+        self.cfg['baskets'][0]['clip'] = 1000
+        original = self.api.book
+        def uneven(i):
+            b = original(i)
+            b['bids'] = [{'price': .52, 'quantity': 500}, {'price': .50, 'quantity': 500}]
+            return b
+        self.api.book = uneven
+        p = self.plan()
+        self.assertEqual(p['quantity'], 500)
+        self.assertAlmostEqual(p['robust_profit'], 15)
+
     def test_default_dry_run_never_writes(self):
         runner = Runner(self.api, self.journal, self.cfg)
         result = runner.submit(self.plan(), self.api.state())
