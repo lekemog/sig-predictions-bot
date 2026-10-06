@@ -197,6 +197,22 @@
           "party": "Republican Party"
         }
       ]
+    },
+    {
+      "name": "Kansas Senate",
+      "clip": 1000,
+      "legs": [
+        {
+          "exchange_id": "1045",
+          "market_id": "356",
+          "party": "Democratic Party"
+        },
+        {
+          "exchange_id": "1046",
+          "market_id": "357",
+          "party": "Republican Party"
+        }
+      ]
     }
   ]
 }
