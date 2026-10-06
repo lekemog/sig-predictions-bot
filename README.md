@@ -4,7 +4,7 @@ A Python trading system for the SIG Predictions Cup. My objective is to find def
 
 ## Hosted operation
 
-GitHub Actions runs the portfolio manager hourly, at minute 37 UTC. Scheduled runs use live execution; manual runs default to dry-run and offer an explicit live option. GitHub schedules can be delayed. The system is an hourly decision process, not continuous market monitoring.
+GitHub Actions runs the portfolio manager three times per hour, at minutes 17, 37 and 57 UTC. Scheduled runs use live execution; manual runs default to dry-run and offer an explicit live option. GitHub schedules can be delayed. The system uses periodic portfolio sweeps, not continuous market monitoring.
 
 The workflow reads the encrypted repository secret SIG_API_KEY. Credentials stay out of source files and checkpoint records. Validation runs before every portfolio review. The private repository must remain private because its checkpoint includes portfolio and execution information.
 
@@ -26,7 +26,7 @@ All new submissions stop at 4 November 2026, 17:00 UTC. Limits are tick-aligned 
 
 Equal NO holdings in n mutually exclusive party-winner contracts for the same race, stage, date and settlement pay at least n-1 under normal settlement. Unlisted winners increase the payout; the model does not assume exhaustive party coverage. Cancellation and N/A outcomes use refund rules instead.
 
-The hosted runner checks all 11 configured baskets, ranks eligible exits before additions and submits at most one new job per hourly run. Whole-basket exits require net proceeds at least equal to their normal-settlement floor. Entries require executable depth and positive profit after documented trading costs plus an extra 0.005 per share per leg. The starting clip is 100 matched shares, reduced when liquidity or risk limits bind.
+The hosted runner checks all 11 configured baskets, ranks eligible exits before additions and submits at most one new job per sweep. Whole-basket or matched partial exits require net proceeds at least equal to their normal-settlement floor. Entries require executable depth and positive profit after documented trading costs plus an extra 0.005 per share per leg. The starting clip is up to 1,000 matched shares, reduced when liquidity or risk limits bind.
 
 The fee allowance is zero based on SIG's no-participant-trading-fee documentation and the reconciled historical ledger. Every new fill/cash reconciliation independently checks that assumption.
 
@@ -55,6 +55,10 @@ Matched hedges are preserved. Price changes alone do not trigger stops on intact
 - bot_config.json: exact contract watchlist and operating controls.
 - .github/workflows/sig-management.yml: scheduled and manual runs.
 
-Python 3.10 or later; standard library only. Run python -m unittest discover -s tests -v. All 32 tests pass, including checkpoint-write failure, fresh-run recovery of an unknown request, duplicate prevention, partial fills, failed repairs, reserves, contract mismatch and cash reconciliation. Tests validate implementation behavior, not trading profitability.
+Python 3.10 or later; standard library only. Run python -m unittest discover -s tests -v. All 36 tests pass, including checkpoint-write failure, fresh-run recovery of an unknown request, duplicate prevention, partial fills, failed repairs, reserves, contract mismatch and cash reconciliation. Tests validate implementation behavior, not trading profitability.
 
 For local use, provide SIG_API_KEY privately in the process environment. python trading_bot.py performs a dry-run; --live enables one execution review; --live --loop repeats hourly on a running machine. Do not run a local live loop alongside the hosted workflow.
+
+A separate read-only hourly health review flags stale successful live sweeps after 90 minutes and cannot submit orders. A configured cron is not evidence of successful unattended execution.
+
+Public reference review (6 October 2026): PredictionMarketTrader/openthomas illustrates calibration, settled-outcome feedback and bounded sizing; charlieyang1557/polymarket-arb illustrates cancel/fill state machines and negative execution results. Their reported venue-specific performance is not evidence of a SIG election edge. No third-party code is executed or supplied account credentials. Our existing margin-normal sensitivity engine requires a validation reference rather than treating poll vote share as win probability.
