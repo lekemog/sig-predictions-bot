@@ -1,0 +1,35 @@
+name: SIG hourly management
+on:
+  schedule:
+    - cron: '37 * * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Execution mode
+        type: choice
+        options:
+          - dry-run
+          - live
+        default: dry-run
+permissions:
+  contents: write
+concurrency:
+  group: sig-portfolio-execution
+  cancel-in-progress: false
+jobs:
+  manage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run validation
+        run: python -m unittest discover -s tests -v
+      - name: Reconcile, screen and manage portfolio
+        env:
+          SIG_API_KEY: ${{ secrets.SIG_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SIG_MODE: ${{ github.event_name == 'schedule' && 'live' || inputs.mode }}
+        run: python hosted_runner.py
