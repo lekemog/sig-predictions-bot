@@ -107,6 +107,38 @@ class TradingTests(unittest.TestCase):
         self.assertEqual(p['prices'], [.48, .48])
         self.assertAlmostEqual(p['robust_profit'], 3)
 
+    def test_larger_clip_keeps_cost_buffer(self):
+        self.cfg['baskets'][0]['clip'] = 500
+        p = self.plan()
+        self.assertEqual(p['quantity'], 500)
+        self.assertAlmostEqual(p['max_spend'], 485)
+        self.assertAlmostEqual(p['robust_profit'], 15)
+
+    def test_thin_exit_book_releases_only_matched_quantity(self):
+        self.api.quantities = {'11': -100, '22': -100}
+        original = self.api.book
+        def thin(i):
+            b = original(i)
+            b['asks'] = [{'price': .485, 'quantity': 60}]
+            return b
+        self.api.book = thin
+        p = self.plan()
+        self.assertEqual(p['kind'], 'basket_exit')
+        self.assertEqual(p['quantity'], 50)
+        self.assertGreaterEqual(p['net_limit_proceeds'], p['value_floor'])
+
+    def test_worse_deeper_exit_prices_do_not_hide_profitable_top_depth(self):
+        self.api.quantities = {'11': -100, '22': -100}
+        original = self.api.book
+        def uneven(i):
+            b = original(i)
+            b['asks'] = [{'price': .485, 'quantity': 50}, {'price': .51, 'quantity': 50}]
+            return b
+        self.api.book = uneven
+        p = self.plan()
+        self.assertEqual(p['kind'], 'basket_exit')
+        self.assertEqual(p['quantity'], 50)
+
     def test_default_dry_run_never_writes(self):
         runner = Runner(self.api, self.journal, self.cfg)
         result = runner.submit(self.plan(), self.api.state())
