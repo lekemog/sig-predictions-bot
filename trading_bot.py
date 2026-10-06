@@ -506,6 +506,8 @@ class Runner:
                 self.journal.event('screened', {'basket': basket['name'], 'candidate': bool(plan)})
             except Halt as e:
                 self.journal.event('abstain', {'basket': basket['name'], 'reason': str(e)})
+                if any(signed_positions(state).get(str(l['exchange_id']), 0) for l in basket['legs']):
+                    raise Halt('Held basket could not be verified: ' + basket['name']) from None
         for case in (cases or [])[:3]:
             plan = directional_plan(self.api, state, self.config, case)
             if plan:
