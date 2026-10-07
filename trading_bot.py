@@ -48,6 +48,29 @@ def qty(value):
     return value
 
 
+def risk_limits(config):
+    """Explicit profile; absent configuration preserves legacy authorization."""
+    legacy = dict(committed=MAX_COMMITTED, reserve=RESERVE, basket=BASKET_CAP,
+                  clip=1000, race=DIRECTIONAL_RACE, directional=DIRECTIONAL_TOTAL,
+                  factor=FACTOR_CAP)
+    supplied = config.get('risk_limits', {})
+    if not isinstance(supplied, dict) or set(supplied) - set(legacy):
+        raise Halt('Invalid risk profile keys')
+    limits = dict(legacy, **supplied)
+    ceilings = dict(committed=75000, basket=15000, clip=5000, race=2500,
+                    directional=15000, factor=7500)
+    for key, value in limits.items():
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise Halt('Risk limits must be positive integers')
+        if key in ceilings and value > ceilings[key]:
+            raise Halt('Risk profile exceeds delegated staged ceiling')
+    if (limits['reserve'] < 25000 or limits['reserve'] + limits['committed'] > 100000
+            or not limits['race'] <= limits['factor'] <= limits['directional'] <= limits['committed']
+            or limits['basket'] > limits['committed']):
+        raise Halt('Inconsistent risk profile')
+    return limits
+
+
 def connection_category(error):
     reason = error.reason if isinstance(error, urllib.error.URLError) else error
     if isinstance(reason, TimeoutError):
@@ -286,6 +309,7 @@ def cost_allowance(config):
 
 
 def basket_plan(api, state, config, basket):
+    risk = risk_limits(config)
     allowance = cost_allowance(config)
     contracts = validate_contracts(api, basket)
     committed, costs, directional = portfolio_risk(state, config)
@@ -296,7 +320,7 @@ def basket_plan(api, state, config, basket):
     if held > 0:
         # A thin book must not hide a profitable matched partial exit. Try the
         # complete holding first, then smaller balanced clips; preserve the hedge.
-        exit_q = min(int(held), 1000)
+        exit_q = min(int(held), risk['clip'])
         while exit_q > 0:
             try:
                 limits = [price_for(books[str(l['exchange_id'])], 'no', 'sell', exit_q)[0]
@@ -311,7 +335,7 @@ def basket_plan(api, state, config, basket):
                 pass
             exit_q //= 2
     # Small default clip sized from displayed depth and surviving edge, not caps.
-    q = min(int(basket.get('clip', 100)), 1000)
+    q = min(qty(basket.get('clip', 100)), risk['clip'])
     while q > 0:
         try:
             limits = [price_for(books[str(l['exchange_id'])], 'no', 'buy', q)[0] for l in basket['legs']]
@@ -323,8 +347,8 @@ def basket_plan(api, state, config, basket):
         if profit < max(1., q * .01):
             q //= 2
             continue
-        if (committed + spend <= MAX_COMMITTED and costs[basket['name']] + spend <= BASKET_CAP
-                and state['cash'] - spend >= RESERVE):
+        if (committed + spend <= risk['committed'] and costs[basket['name']] + spend <= risk['basket']
+                and state['cash'] - spend >= risk['reserve']):
             return {'kind': 'basket_entry', 'name': basket['name'], 'action': 'buy', 'quantity': q,
                     'legs': basket['legs'], 'prices': limits, 'max_spend': spend,
                     'value_floor': q * (n - 1), 'robust_profit': profit, 'contracts': contracts,
@@ -336,6 +360,7 @@ def basket_plan(api, state, config, basket):
 
 
 def directional_plan(api, state, config, supplied):
+    risk = risk_limits(config)
     c = copy.deepcopy(supplied)
     if c['trade']['side'] not in ('yes', 'no'):
         raise Halt('Invalid directional side')
@@ -360,16 +385,16 @@ def directional_plan(api, state, config, supplied):
         raise Halt('Directional entries restricted to flat exchanges; preserve existing hedges')
     allowance = cost_allowance(config)
     c['costs'] = dict(config['costs'], slippage_per_share=.005)
-    c['risk'] = {'cash': state['cash'], 'minimum_cash': RESERVE,
+    c['risk'] = {'cash': state['cash'], 'minimum_cash': risk['reserve'],
                  'race_exposure': exposure, 'factor_exposure': exposure, 'total_exposure': exposure,
-                 'max_race_loss': DIRECTIONAL_RACE, 'max_factor_loss': FACTOR_CAP, 'max_total_loss': DIRECTIONAL_TOTAL}
+                 'max_race_loss': risk['race'], 'max_factor_loss': risk['factor'], 'max_total_loss': risk['directional']}
     c['trade']['minimum_edge'] = max(.05, float(c['trade'].get('minimum_edge', .05)))
     decision = evaluate(c)
     limit, _ = price_for(book, c['trade']['side'], 'buy', q)
     worst_loss = q * (limit + allowance)
     conservative = decision['probability_range'][0] - limit - allowance
-    if (decision['decision'] != 'CANDIDATE' or conservative < .05 or worst_loss + exposure > DIRECTIONAL_RACE
-            or committed + worst_loss > MAX_COMMITTED or state['cash'] - worst_loss < RESERVE):
+    if (decision['decision'] != 'CANDIDATE' or conservative < .05 or worst_loss + exposure > risk['race']
+            or committed + worst_loss > risk['committed'] or state['cash'] - worst_loss < risk['reserve']):
         return None
     return {'kind': 'directional_entry', 'name': c['contract']['question'], 'action': 'buy',
             'side': c['trade']['side'], 'quantity': q, 'legs': [leg], 'prices': [limit],
@@ -387,8 +412,8 @@ class Runner:
 
     def submit(self, plan, state):
         self.check_stop()
-        if qty(plan['quantity']) > 1000:
-            raise Halt('Execution clip exceeds 1000 matched shares')
+        if qty(plan['quantity']) > risk_limits(self.config)['clip']:
+            raise Halt('Execution clip exceeds configured matched shares')
         legs, prices = plan.get('legs'), plan.get('prices')
         if (not isinstance(legs, list) or not legs or not isinstance(prices, list)
                 or len(legs) != len(prices)):
@@ -474,10 +499,12 @@ class Runner:
             job['observed_extra_cost'] = expected_cash_change - job['cash_change']
             if (job['observed_extra_cost'] < -.01 or job['observed_extra_cost'] > filled_shares * float(self.config['costs']['fee_per_share']) + .01):
                 raise Halt('Fill/cash costs do not reconcile to verified fee allowance')
-            if after['cash'] < RESERVE:
+            risk = risk_limits(self.config)
+            if after['cash'] < risk['reserve']:
                 raise Halt('Cash reserve breached after fills')
             committed, race_cost, directional = portfolio_risk(after, self.config)
-            if committed > MAX_COMMITTED or any(c > BASKET_CAP for c in race_cost.values()) or directional > DIRECTIONAL_TOTAL:
+            if (committed > risk['committed'] or any(c > risk['basket'] for c in race_cost.values())
+                    or directional > risk['directional']):
                 raise Halt('Post-fill exposure exceeds configured ceilings')
             self.journal.save(job, 'done')
             return {'completed': job['id'], 'cash': after['cash'], 'cash_change': job['cash_change'],
@@ -516,7 +543,7 @@ class Runner:
             total_stress += loss + q * cost_allowance(self.config)
             if total_stress > budget:
                 raise Halt('Repair depth/cost exceeds10 SUSQies; manual reconciliation needed')
-            if action == 'buy' and (after['cash'] - q * (price + cost_allowance(self.config)) < RESERVE):
+            if action == 'buy' and (after['cash'] - q * (price + cost_allowance(self.config)) < risk_limits(self.config)['reserve']):
                 raise Halt('Repair would breach cash reserve')
             request = {'exchangeId': i, 'side': 'no', 'action': action, 'quantity': q, 'price': price,
                        'tournamentId': TID, 'expirationDate': min(now() + timedelta(seconds=60), END).isoformat(),

@@ -1,0 +1,24 @@
+# Deploy only after operator approves hosting cost and securely supplies the token.
+# GitHub remains the only SIG execution owner. Default is a dry-run trigger.
+services:
+  - type: worker
+    name: sig-github-sweep-trigger
+    runtime: python
+    plan: 0.5c-512mb
+    region: frankfurt
+    branch: main
+    numInstances: 1
+    autoDeployTrigger: 'off'
+    buildCommand: python -m unittest discover -s tests -q && python -m unittest test_market_brain test_research_service test_dispatch_service -q
+    startCommand: python dispatch_service.py --database /var/data/dispatch.sqlite
+    disk:
+      name: dispatch-journal
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.11
+      - key: GITHUB_DISPATCH_TOKEN
+        sync: false
+      - key: DISPATCH_MODE
+        value: dry-run
