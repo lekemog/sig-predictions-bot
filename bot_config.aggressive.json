@@ -1,0 +1,227 @@
+{
+  "costs": {
+    "verified": false,
+    "source": "",
+    "fee_per_share": 0.005
+  },
+  "kill_switch": "private/STOP",
+  "repair_loss_budget": 10,
+  "baskets": [
+    {
+      "name": "NH-01",
+      "clip": 5000,
+      "legs": [
+        {
+          "exchange_id": "1064",
+          "market_id": "375",
+          "party": "Democratic Party"
+        },
+        {
+          "exchange_id": "1065",
+          "market_id": "376",
+          "party": "Republican Party"
+        }
+      ]
+    },
+    {
+      "name": "Texas Senate",
+      "clip": 5000,
+      "legs": [
+        {
+          "exchange_id": "982",
+          "market_id": "293",
+          "party": "Democratic Party"
+        },
+        {
+          "exchange_id": "983",
+          "market_id": "294",
+          "party": "Republican Party"
+        }
+      ]
+    },
+    {
+      "name": "NC Senate",
+      "clip": 5000,
+      "legs": [
+        {
+          "exchange_id": "966",
+          "market_id": "277",
+          "party": "Democratic Party"
+        },
+        {
+          "exchange_id": "967",
+          "market_id": "278",
+          "party": "Republican Party"
+        }
+      ]
+    },
+    {
+      "name": "NH Senate",
+      "clip": 5000,
+      "legs": [
+        {
+          "exchange_id": "1070",
+          "market_id": "381",
+          "party": "Democratic Party"
+        },
+        {
+          "exchange_id": "1071",
+          "market_id": "382",
+          "party": "Republican Party"
+        }
+      ]
+    },
+    {
+      "name": "PA Governor",
+      "clip": 5000,
+      "legs": [
+        {
+          "exchange_id": "878",
+          "market_id": "189",
+          "party": "Democratic Party"
+        },
+        {
+          "exchange_id": "879",
+          "market_id": "190",
+          "party": "Republican Party"
+        }
+      ]
+    },
+    {
+      "name": "MI-07",
+      "clip": 5000,
+      "legs": [
+        {
+          "exchange_id": "1019",
+          "market_id": "330",
+          "party": "Democratic Party"
+        },
+        {
+          "exchange_id": "1020",
+          "market_id": "331",
+          "party": "Republican Party"
+        }
+      ]
+    },
+    {
+      "name": "VA-01",
+      "clip": 5000,
+      "legs": [
+        {
+          "exchange_id": "938",
+          "market_id": "249",
+          "party": "Republican Party"
+        },
+        {
+          "exchange_id": "1031",
+          "market_id": "342",
+          "party": "Democratic Party"
+        }
+      ]
+    },
+    {
+      "name": "Alaska Governor",
+      "clip": 5000,
+      "legs": [
+        {
+          "exchange_id": "1057",
+          "market_id": "368",
+          "party": "Democratic Party"
+        },
+        {
+          "exchange_id": "1058",
+          "market_id": "369",
+          "party": "Republican Party"
+        }
+      ]
+    },
+    {
+      "name": "Montana Senate",
+      "clip": 5000,
+      "legs": [
+        {
+          "exchange_id": "963",
+          "market_id": "274",
+          "party": "Democratic Party"
+        },
+        {
+          "exchange_id": "964",
+          "market_id": "275",
+          "party": "Republican Party"
+        },
+        {
+          "exchange_id": "965",
+          "market_id": "276",
+          "party": "Independent"
+        }
+      ]
+    },
+    {
+      "name": "Nebraska Senate",
+      "clip": 5000,
+      "legs": [
+        {
+          "exchange_id": "968",
+          "market_id": "279",
+          "party": "Democratic Party"
+        },
+        {
+          "exchange_id": "969",
+          "market_id": "280",
+          "party": "Nonpartisan"
+        },
+        {
+          "exchange_id": "970",
+          "market_id": "281",
+          "party": "Republican Party"
+        }
+      ]
+    },
+    {
+      "name": "RI Governor",
+      "clip": 5000,
+      "legs": [
+        {
+          "exchange_id": "880",
+          "market_id": "191",
+          "party": "Independent"
+        },
+        {
+          "exchange_id": "1073",
+          "market_id": "384",
+          "party": "Democratic Party"
+        },
+        {
+          "exchange_id": "1074",
+          "market_id": "385",
+          "party": "Republican Party"
+        }
+      ]
+    },
+    {
+      "name": "Kansas Senate",
+      "clip": 5000,
+      "legs": [
+        {
+          "exchange_id": "1045",
+          "market_id": "356",
+          "party": "Democratic Party"
+        },
+        {
+          "exchange_id": "1046",
+          "market_id": "357",
+          "party": "Republican Party"
+        }
+      ]
+    }
+  ],
+  "risk_limits": {
+    "committed": 75000,
+    "reserve": 25000,
+    "basket": 15000,
+    "clip": 5000,
+    "race": 2500,
+    "directional": 15000,
+    "factor": 7500
+  }
+}
