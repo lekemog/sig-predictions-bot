@@ -296,7 +296,7 @@ def basket_plan(api, state, config, basket):
     if held > 0:
         # A thin book must not hide a profitable matched partial exit. Try the
         # complete holding first, then smaller balanced clips; preserve the hedge.
-        exit_q = int(held)
+        exit_q = min(int(held), 1000)
         while exit_q > 0:
             try:
                 limits = [price_for(books[str(l['exchange_id'])], 'no', 'sell', exit_q)[0]
@@ -385,6 +385,8 @@ class Runner:
 
     def submit(self, plan, state):
         self.check_stop()
+        if qty(plan['quantity']) > 1000:
+            raise Halt('Execution clip exceeds 1000 matched shares')
         expiration = min(now() + timedelta(seconds=90), END).isoformat()
         request = {'idempotencyKey': str(uuid.uuid4()), 'legs': [
             {'exchangeId': str(l['exchange_id']), 'side': plan.get('side', 'no'), 'action': plan['action'],
