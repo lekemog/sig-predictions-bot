@@ -1,7 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from hosted_runner import DurableJournal, record_sweep
+from hosted_runner import DurableJournal, cycle_screening, record_sweep
 from trading_bot import Halt
 
 
@@ -50,6 +50,38 @@ class PersistenceTests(unittest.TestCase):
 
 
 class HeartbeatTests(unittest.TestCase):
+    def screening_result(self, old, fresh, baskets):
+        remote = Remote()
+        with tempfile.TemporaryDirectory() as directory:
+            journal = DurableJournal(str(Path(directory) / 'journal.sqlite'), remote)
+            for name in old:
+                journal.event('screened', {'basket': name})
+            start = journal.db.execute('SELECT COALESCE(MAX(rowid), 0) FROM events').fetchone()[0]
+            for name in fresh:
+                journal.event('screened', {'basket': name})
+            return cycle_screening(journal, start, [{'name': name} for name in baskets])
+
+    def test_pending_only_recovery_cannot_refresh_live_sweep(self):
+        status, count = self.screening_result(['A', 'B'], [], ['A', 'B'])
+        self.assertEqual((status, count), ('incomplete', 0))
+        remote = Remote()
+        record_sweep(remote, 'live', 'success', 2)
+        previous = dict(remote.data['last_successful_live_sweep'])
+        record_sweep(remote, 'live', status, count)
+        self.assertEqual(remote.data['last_successful_live_sweep'], previous)
+
+    def test_partial_or_duplicate_screening_is_not_full_sweep(self):
+        self.assertEqual(self.screening_result([], ['A', 'A'], ['A', 'B']), ('incomplete', 1))
+
+    def test_all_current_baskets_verify_full_sweep(self):
+        self.assertEqual(self.screening_result(['A'], ['A', 'B'], ['A', 'B']), ('success', 2))
+
+    def test_unconfigured_screening_does_not_count(self):
+        self.assertEqual(self.screening_result([], ['A', 'other'], ['A', 'B']), ('incomplete', 1))
+
+    def test_empty_configuration_is_not_a_full_sweep(self):
+        self.assertEqual(self.screening_result([], [], []), ('incomplete', 0))
+
     def test_dry_run_cannot_claim_successful_live_management(self):
         remote = Remote()
         record_sweep(remote, 'dry-run', 'success', 12)
