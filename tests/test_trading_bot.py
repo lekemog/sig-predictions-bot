@@ -5,7 +5,7 @@ from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-from trading_bot import (END, Halt, Journal, Runner, basket_plan, now,
+from trading_bot import (END, Halt, Journal, Runner, basket_plan, directional_plan, now,
                          portfolio_risk, tick, validate_contracts)
 
 
@@ -187,6 +187,26 @@ class TradingTests(unittest.TestCase):
                 Runner(self.api, self.journal, self.cfg, live).submit(plan, self.api.state())
         self.assertEqual(self.api.calls, [])
         self.assertEqual(self.journal.pending(), [])
+
+    def test_malformed_submission_never_journals_partial_hedge(self):
+        for mutation in ('missing_price','duplicate_exchange','invalid_side','invalid_price'):
+            plan = copy.deepcopy(self.plan())
+            if mutation == 'missing_price': plan['prices'].pop()
+            elif mutation == 'duplicate_exchange': plan['legs'][1] = dict(plan['legs'][0])
+            elif mutation == 'invalid_side': plan['side'] = 'invalid'
+            else: plan['prices'][0] = True
+            for live in (False, True):
+                with self.assertRaises(Halt):
+                    Runner(self.api,self.journal,self.cfg,live).submit(plan,self.api.state())
+            self.assertEqual(self.api.calls, [])
+            self.assertEqual(self.journal.pending(), [])
+
+    def test_directional_entry_cannot_unmatch_a_flat_configured_basket(self):
+        case = {'trade': {'side': 'yes', 'quantity': 100},
+                'contract': {'market_id': '1', 'exchange_id': '11'}}
+        with self.assertRaisesRegex(Halt, 'configured basket unmatched'):
+            directional_plan(self.api,self.api.state(),self.cfg,case)
+        self.assertEqual(self.api.calls, [])
 
     def test_live_complete_fills_reconciled(self):
         runner = Runner(self.api, self.journal, self.cfg, True)
