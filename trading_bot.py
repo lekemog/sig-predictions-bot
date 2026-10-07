@@ -3,6 +3,7 @@ import argparse
 import copy
 import fcntl
 import hashlib
+import http.client
 import json
 import math
 import os
@@ -60,21 +61,37 @@ class API:
         if not path.startswith('/') or '://' in path:
             raise Halt('Only supported SIG /api/v1 paths permitted')
         bucket = 'GET' if method == 'GET' else 'WRITE'
-        delay = max(0, self.last[bucket] + (0.8 if bucket == 'GET' else 2.2) - time.monotonic())
-        if delay:
-            time.sleep(delay)
-        self.last[bucket] = time.monotonic()
         data = None if payload is None else json.dumps(payload, allow_nan=False).encode()
         req = urllib.request.Request(BASE + path, data=data, method=method,
                                      headers={'Authorization': 'Bearer ' + self.key, 'Content-Type': 'application/json'})
-        try:
-            with self.opener.open(req, timeout=20) as response:
-                return json.load(response)
-        except urllib.error.HTTPError as e:
-            # Never print headers, credential values, arbitrary server bodies or request objects.
-            raise Halt(f'SIG HTTP {e.code}; reconcile before any placement retry') from None
-        except (urllib.error.URLError, TimeoutError):
-            raise Halt('SIG connection failed; placement outcome may be unknown') from None
+        # Only reads can retry here. Writes retain their durable reconciliation path.
+        attempts = 3 if method == 'GET' else 1
+        for attempt in range(attempts):
+            delay = max(0, self.last[bucket] + (0.8 if bucket == 'GET' else 2.2) - time.monotonic())
+            if delay:
+                time.sleep(delay)
+            self.last[bucket] = time.monotonic()
+            try:
+                with self.opener.open(req, timeout=20) as response:
+                    return json.load(response)
+            except urllib.error.HTTPError as e:
+                code = e.code
+                e.close()
+                retryable = code in (429, 500, 502, 503, 504)
+                failure = f'SIG {method} HTTP {code}'
+            except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException):
+                retryable = True
+                failure = f'SIG {method} connection failed'
+            except (ValueError, UnicodeError):
+                retryable = False
+                failure = f'SIG {method} invalid JSON response'
+            # Never expose credentials, headers, server bodies or exception strings.
+            if method == 'GET' and retryable and attempt + 1 < attempts:
+                time.sleep(2 ** attempt)
+                continue
+            if method == 'GET':
+                raise Halt(f'{failure}; read failed after {attempt + 1} attempt(s)') from None
+            raise Halt(f'{failure}; write outcome may be unknown; reconcile before retry') from None
 
     def get(self, path):
         return self.request('GET', path)
