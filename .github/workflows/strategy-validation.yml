@@ -22,3 +22,5 @@ jobs:
         run: python -m unittest test_market_brain -v
       - name: Persistent observations and exit trace regression tests
         run: python -m unittest test_research_service -v
+      - name: Persistent trigger and staged profile regression tests
+        run: python -m unittest test_dispatch_service -v
