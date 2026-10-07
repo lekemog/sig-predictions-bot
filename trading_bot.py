@@ -8,6 +8,8 @@ import json
 import math
 import os
 import sqlite3
+import socket
+import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -46,6 +48,21 @@ def qty(value):
     return value
 
 
+def connection_category(error):
+    reason = error.reason if isinstance(error, urllib.error.URLError) else error
+    if isinstance(reason, TimeoutError):
+        return 'timeout'
+    if isinstance(reason, socket.gaierror):
+        return 'dns'
+    if isinstance(reason, ssl.SSLError):
+        return 'tls'
+    if isinstance(reason, ConnectionError):
+        return 'disconnected'
+    if isinstance(reason, http.client.HTTPException):
+        return 'http_transport'
+    return 'transport'
+
+
 class API:
     def __init__(self, key):
         if not key:
@@ -71,20 +88,31 @@ class API:
             if delay:
                 time.sleep(delay)
             self.last[bucket] = time.monotonic()
+            started = time.monotonic()
+            phase = 'connect_or_headers'
+            category = 'unknown'
             try:
                 with self.opener.open(req, timeout=20) as response:
+                    phase = 'response_body'
                     return json.load(response)
             except urllib.error.HTTPError as e:
                 code = e.code
+                category = f'http_{code}'
                 e.close()
                 retryable = code in (429, 500, 502, 503, 504)
                 failure = f'SIG {method} HTTP {code}'
-            except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException):
+            except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException) as error:
+                category = connection_category(error)
                 retryable = True
                 failure = f'SIG {method} connection failed'
             except (ValueError, UnicodeError):
+                category = 'invalid_json'
                 retryable = False
                 failure = f'SIG {method} invalid JSON response'
+            # Log only fixed categories and timing; never URLs, headers or exception text.
+            print(json.dumps({'event': 'sig_request_failure', 'operation': bucket,
+                              'phase': phase, 'category': category, 'attempt': attempt + 1,
+                              'elapsed_seconds': round(time.monotonic() - started, 3)}), flush=True)
             # Never expose credentials, headers, server bodies or exception strings.
             if method == 'GET' and retryable and attempt + 1 < attempts:
                 time.sleep(2 ** attempt)
