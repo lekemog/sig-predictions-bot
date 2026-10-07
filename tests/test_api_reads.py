@@ -1,5 +1,8 @@
 import http.client
 import io
+import json
+import socket
+import ssl
 import unittest
 import urllib.error
 from unittest.mock import Mock, patch
@@ -11,6 +14,7 @@ class ReadRetryTests(unittest.TestCase):
     def setUp(self):
         self.api = API('test-key-never-log')
         self.api.opener = Mock()
+        self.output = patch('builtins.print').start()
         self.sleep = patch('trading_bot.time.sleep').start()
         self.addCleanup(patch.stopall)
 
@@ -77,3 +81,34 @@ class ReadRetryTests(unittest.TestCase):
         self.api.opener.open.side_effect = [self.response()]
         self.assertEqual(self.api.request('POST', '/orders', {'idempotencyKey': 'same-key'}), {'ok': True})
         self.assertEqual(self.api.opener.open.call_count, 1)
+
+    def test_connection_diagnostics_use_only_safe_categories(self):
+        failures = [(TimeoutError('SECRET'), 'timeout'),
+                    (urllib.error.URLError(socket.gaierror(-2, 'SECRET')), 'dns'),
+                    (urllib.error.URLError(ssl.SSLError('SECRET')), 'tls'),
+                    (ConnectionResetError('SECRET'), 'disconnected'),
+                    (http.client.IncompleteRead(b'SECRET'), 'http_transport'),
+                    (urllib.error.URLError('SECRET'), 'transport')]
+        for error, category in failures:
+            with self.subTest(category=category):
+                self.output.reset_mock()
+                self.api.opener.open.side_effect = error
+                with self.assertRaises(Halt):
+                    self.api.get('/SECRET?credential=SECRET')
+                record = json.loads(self.output.call_args.args[0])
+                self.assertEqual(record['category'], category)
+                self.assertEqual(record['phase'], 'connect_or_headers')
+                self.assertNotIn('SECRET', str(self.output.call_args_list))
+
+    def test_body_timeout_is_distinguished_from_connection(self):
+        response = self.response()
+        body = Mock()
+        body.read.side_effect = TimeoutError('SECRET')
+        response.__enter__.return_value = body
+        self.api.opener.open.side_effect = [response, response, response]
+        with self.assertRaises(Halt):
+            self.api.get('/portfolio')
+        record = json.loads(self.output.call_args.args[0])
+        self.assertEqual(record['phase'], 'response_body')
+        self.assertEqual(record['category'], 'timeout')
+        self.assertNotIn('SECRET', str(self.output.call_args_list))
