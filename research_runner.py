@@ -22,14 +22,14 @@ from trading_bot import API, Halt, TID, now
 
 
 class ReadOnlyAPI(API):
-    def __init__(self, key, store):
+    def __init__(self, key, store, read_ceiling=80):
         super().__init__(key)
         underlying = self.opener
         class BudgetedOpener:
             def open(self, request, *args, **kwargs):
                 if request.get_method() != 'GET':
                     raise Halt('Research transport prohibits writes')
-                store.take_read(time.time())  # Every HTTP attempt, including GET retries.
+                store.take_read(time.time(), read_ceiling)  # Count GET retries too.
                 return underlying.open(request, *args, **kwargs)
         self.opener = BudgetedOpener()
 
@@ -62,6 +62,8 @@ def collect(api, proofs, maximum_candidates=3):
     Latest prices screen leads only. Actual candidate evaluation consumes books.
     Relationship proofs are manually reviewed, hash-bound and time-limited.
     """
+    if isinstance(maximum_candidates, bool) or not isinstance(maximum_candidates, int) or not 0 <= maximum_candidates <= 3:
+        raise ValueError('Detailed candidate bound must be between zero and three')
     markets = pages(api, f'/markets?limit=100&status=open&tournamentId={TID}')
     catalog = {}
     for m in markets:
@@ -109,6 +111,7 @@ def collect(api, proofs, maximum_candidates=3):
                 failures.append(dict(exchange_id=i,category='READ_UNAVAILABLE'))
     return dict(at=now().isoformat(), tournament_id=TID,
         catalog_count=len(markets), exchange_count=len(catalog),
+        markets=markets, exchange_catalog=catalog, relationship_catalog=relations,
         relationship_count=len(relations), universe_discovery_complete=True,
         relations=selected, books=books, proofs=proofs, read_failures=failures,
         note='Current-price lead ranking only; selected depth is not whole-universe executable coverage')
@@ -133,6 +136,8 @@ def research(snapshot, store, now_at=None):
             quote_proposal(c['book'],c['model'],c['inventory'],at,c.get('clip',100))))
     result = scan_parallel(jobs[:3])  # At most three detailed candidates per review.
     result.update(at=at.isoformat(),mode='research',orders_submitted=0,
+                  detailed_candidates_reviewed=min(3,len(jobs)),
+                  live_readiness='NOT_ASSESSED',
                   snapshot_id=digest(snapshot),universe_discovery_complete=
                   snapshot.get('universe_discovery_complete',False))
     store.observe(dict(kind='scanner_results', result=result))

@@ -341,6 +341,8 @@ def directional_plan(api, state, config, supplied):
         raise Halt('Invalid directional side')
     q = qty(c['trade']['quantity'])
     leg = {'market_id': str(c['contract']['market_id']), 'exchange_id': str(c['contract']['exchange_id'])}
+    if leg['exchange_id'] in {str(l['exchange_id']) for b in config['baskets'] for l in b['legs']}:
+        raise Halt('Directional entry would make a configured basket unmatched')
     # Contract record must be reviewed against current source, not just a boolean.
     market = api.get(f'/tournaments/{SLUG}/markets/{leg["market_id"]}')
     nodes = api.get(f'/markets/{leg["market_id"]}/nodes')
@@ -387,6 +389,19 @@ class Runner:
         self.check_stop()
         if qty(plan['quantity']) > 1000:
             raise Halt('Execution clip exceeds 1000 matched shares')
+        legs, prices = plan.get('legs'), plan.get('prices')
+        if (not isinstance(legs, list) or not legs or not isinstance(prices, list)
+                or len(legs) != len(prices)):
+            raise Halt('Execution legs and prices must be complete and aligned')
+        ids = [str(l.get('exchange_id', '')) for l in legs]
+        if any(not i.isdecimal() for i in ids) or len(set(ids)) != len(ids):
+            raise Halt('Execution exchanges must be unique numeric IDs')
+        if plan.get('action') not in ('buy', 'sell') or plan.get('side', 'no') not in ('yes', 'no'):
+            raise Halt('Invalid execution side or action')
+        for price in prices:
+            if isinstance(price, bool) or not isinstance(price, (int, float)):
+                raise Halt('Execution price must be numeric')
+            tick(price)  # Reject before intent is journaled, even in dry-run mode.
         expiration = min(now() + timedelta(seconds=90), END).isoformat()
         request = {'idempotencyKey': str(uuid.uuid4()), 'legs': [
             {'exchangeId': str(l['exchange_id']), 'side': plan.get('side', 'no'), 'action': plan['action'],
