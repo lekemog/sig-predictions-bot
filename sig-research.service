@@ -1,0 +1,22 @@
+[Unit]
+Description=SIG read-only market observations (no trading)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sigbot
+WorkingDirectory=/opt/sig-predictions-bot
+EnvironmentFile=/etc/sigbot/research.env
+ExecStart=/usr/bin/python3 research_service.py --database /var/lib/sigbot/brain.sqlite --watchlist /var/lib/sigbot/watchlist.json
+Restart=on-failure
+RestartSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/sigbot
+
+[Install]
+WantedBy=multi-user.target
