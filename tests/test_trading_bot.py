@@ -166,6 +166,28 @@ class TradingTests(unittest.TestCase):
         self.assertEqual(self.api.calls, [])
         self.assertEqual(self.journal.pending(), [])
 
+    def test_large_holding_exit_is_capped_at_1000(self):
+        self.api.quantities = {'11': -2200, '22': -2200}
+        original = self.api.book
+        def profitable(i):
+            b = original(i)
+            b['asks'] = [{'price': .485, 'quantity': 10000}]
+            return b
+        self.api.book = profitable
+        plan = self.plan()
+        self.assertEqual(plan['kind'], 'basket_exit')
+        self.assertEqual(plan['quantity'], 1000)
+        self.assertGreaterEqual(plan['net_limit_proceeds'], plan['value_floor'])
+
+    def test_submit_rejects_oversized_clip_before_journal_or_write(self):
+        plan = self.plan()
+        plan['quantity'] = 1001
+        for live in (False, True):
+            with self.assertRaises(Halt):
+                Runner(self.api, self.journal, self.cfg, live).submit(plan, self.api.state())
+        self.assertEqual(self.api.calls, [])
+        self.assertEqual(self.journal.pending(), [])
+
     def test_live_complete_fills_reconciled(self):
         runner = Runner(self.api, self.journal, self.cfg, True)
         result = runner.submit(self.plan(), self.api.state())
