@@ -20,3 +20,5 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Coordinated research regression tests
         run: python -m unittest test_market_brain -v
+      - name: Persistent observations and exit trace regression tests
+        run: python -m unittest test_research_service -v
