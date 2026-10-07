@@ -96,6 +96,17 @@ def record_sweep(remote, mode, status, basket_count):
             remote.data['last_successful_live_sweep'] = marker
 
 
+def cycle_screening(journal, start_rowid, baskets):
+    """Count only this invocation's verified baskets, never restored history."""
+    expected = {b['name'] for b in baskets}
+    rows = journal.db.execute(
+        "SELECT body FROM events WHERE rowid > ? AND kind = 'screened'",
+        (start_rowid,))
+    screened = {json.loads(body).get('basket') for (body,) in rows} & expected
+    complete = bool(expected) and screened == expected
+    return ('success' if complete else 'incomplete'), len(screened)
+
+
 def main():
     if now() >= END:
         print('Trading cutoff reached; no API orders or further reviews.')
@@ -116,14 +127,17 @@ def main():
     journal = DurableJournal('private/hosted.sqlite', remote)
     runner = HostedRunner(API(os.environ.get('SIG_API_KEY')), journal, config,
                     live=os.environ.get('SIG_MODE', 'dry-run') == 'live')
+    start_rowid = journal.db.execute('SELECT COALESCE(MAX(rowid), 0) FROM events').fetchone()[0]
     try:
         result = runner.cycle()
-        record_sweep(remote, 'live' if runner.live else 'dry-run', 'success', len(config['baskets']))
+        status, screened_count = cycle_screening(journal, start_rowid, config['baskets'])
+        record_sweep(remote, 'live' if runner.live else 'dry-run', status, screened_count)
         journal.event('hosted_result', result)
         print(json.dumps(result, allow_nan=False), flush=True)
     except BaseException:
         # Fail closed. An unresolved job remains in the remote checkpoint.
-        record_sweep(remote, 'live' if runner.live else 'dry-run', 'failure', len(config['baskets']))
+        _, screened_count = cycle_screening(journal, start_rowid, config['baskets'])
+        record_sweep(remote, 'live' if runner.live else 'dry-run', 'failure', screened_count)
         journal.event('hosted_failure', {'at': now().isoformat(), 'message': 'Run failed; review logs and reconcile'})
         raise
     finally:
