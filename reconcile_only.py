@@ -3,10 +3,20 @@ import json
 import os
 from pathlib import Path
 from hosted_runner import DurableJournal, RepositoryState, record_sweep
-from trading_bot import API, Halt, Runner
+from trading_bot import API, Halt, Runner, signed_positions
 
 
 class ReadOnlyAPI(API):
+    def state(self):
+        state = super().state()
+        # Whitelisted account evidence only; never print transport exceptions,
+        # headers, credentials or arbitrary API responses.
+        print(json.dumps({'event': 'readonly_account_snapshot', 'at': state['at'],
+                          'cash': state['cash'], 'positions': signed_positions(state),
+                          'open_orders': len(state['orders']),
+                          'recent_fill_ids': [f.get('id') for f in state['recent_fills']]}), flush=True)
+        return state
+
     def request(self, method, path, payload=None):
         if method != 'GET' or payload is not None:
             raise Halt('Read-only reconciliation prohibits order writes')
