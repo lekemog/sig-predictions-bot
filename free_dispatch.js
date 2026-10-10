@@ -9,6 +9,7 @@ const SIG_FREE = Object.freeze({
 });
 
 function freeGitHubRequest(method, path, payload, token, fetcher) {
+  token = typeof token === 'string' ? token.trim() : '';
   if (!token || !['GET', 'POST'].includes(method) || !path.startsWith('/') ||
       path.includes('..') || (method === 'POST' &&
       path !== '/actions/workflows/' + SIG_FREE.workflow + '/dispatches')) {

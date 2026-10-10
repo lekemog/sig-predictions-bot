@@ -110,3 +110,11 @@ test('owner diagnostics perform only reads and redact credential and remote erro
   assert.equal(logs[0],'{"phase":"workflow","category":"GITHUB_HTTP_403"}');
   assert.equal(logs.some(x => x.includes('fixture-private')),false);
 });
+
+test('credential transport removes surrounding whitespace without logging it', () => {
+  let authorization;
+  freeGitHubRequest('GET','/actions/workflows/sig-management.yml',undefined,'  fixture-token\n',
+    (url, options) => { authorization=options.headers.Authorization;
+      return {getResponseCode:()=>200,getContentText:()=>'{"state":"active"}'}; });
+  assert.equal(authorization,'Bearer fixture-token');
+});
