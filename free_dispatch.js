@@ -191,5 +191,35 @@ function installDryRunTrigger() {
   } finally { lock.releaseLock(); }
 }
 
+// Owner must run this button manually. It activates the existing timer only;
+// no trading runner, timer or GitHub dispatch is created here.
+function activateVerifiedLiveScheduler() {
+  if (Date.now() >= SIG_FREE.cutoff) throw new Error('CUTOFF');
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) throw new Error('SCHEDULER_BUSY');
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    if (properties.getProperty('RUN_ENABLED') !== 'true') throw new Error('DISABLED');
+    const timers = ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'sigFreeTick');
+    if (timers.length !== 1) throw new Error('EXACTLY_ONE_EXISTING_TIMER_REQUIRED');
+    const last = properties.getProperty('LAST_DISPATCH');
+    if (last !== null && !['accepted', 'rejected'].includes(JSON.parse(last).status)) {
+      throw new Error('UNKNOWN_DISPATCH_REQUIRES_REVIEW');
+    }
+    const api = freeDispatchApi((method, path, payload) => {
+      if (method !== 'GET' || payload !== undefined) throw new Error('INVALID_GITHUB_REQUEST');
+      return freeGitHubRequest(method, path, payload, properties.getProperty('GITHUB_DISPATCH_TOKEN'),
+        (url, options) => UrlFetchApp.fetch(url, options));
+    }, text => Utilities.newBlob(Utilities.base64Decode(text)).getDataAsString('UTF-8'));
+    const result = api.status();
+    if (result.busy) throw new Error('EXECUTOR_BUSY');
+    if (result.state.jobs.some(j => !['done', 'dry_run'].includes(j.status))) {
+      throw new Error('PENDING_EXECUTION_REQUIRES_RECONCILIATION');
+    }
+    properties.setProperty('DISPATCH_MODE', 'live');
+    console.log('LIVE_TIMER_ENABLED_GITHUB_REMAINS_SOLE_EXECUTOR');
+  } finally { lock.releaseLock(); }
+}
+
 if (typeof module !== 'undefined') module.exports = {SIG_FREE, freeGitHubRequest,
   freeDispatchApi, freeDispatchTick, freeFailureCategory};

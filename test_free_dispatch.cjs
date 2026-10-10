@@ -118,3 +118,28 @@ test('credential transport removes surrounding whitespace without logging it', (
       return {getResponseCode:()=>200,getContentText:()=>'{"state":"active"}'}; });
   assert.equal(authorization,'Bearer fixture-token');
 });
+
+test('owner activation validates existing single timer and uses GET-only transport', () => {
+  const vm=require('node:vm'), fs=require('node:fs');
+  const methods=[], writes=[], logs=[];
+  let timerCount=1, pending=false;
+  const context={console:{log:x=>logs.push(x)},
+    PropertiesService:{getScriptProperties:()=>({getProperty:k=>({RUN_ENABLED:'true',GITHUB_DISPATCH_TOKEN:'fixture'}[k]??null),setProperty:(k,v)=>writes.push([k,v])})},
+    LockService:{getScriptLock:()=>({tryLock:()=>true,releaseLock:()=>{}})},
+    ScriptApp:{getProjectTriggers:()=>Array.from({length:timerCount},()=>({getHandlerFunction:()=> 'sigFreeTick'}))},
+    UrlFetchApp:{fetch:(url,options)=>{methods.push(options.method);
+      const body=url.includes('/contents/')?{encoding:'base64',content:'fixture-checkpoint'}:
+        url.includes('/actions/runs?')?{workflow_runs:[],total_count:0}:{state:'active'};
+      return {getResponseCode:()=>200,getContentText:()=>JSON.stringify(body)};}},
+    Utilities:{base64Decode:x=>x,newBlob:()=>({getDataAsString:()=>JSON.stringify({version:1,enabled:true,jobs:pending?[{status:'halted'}]:[]})})}
+  };
+  vm.createContext(context);vm.runInContext(fs.readFileSync('free_dispatch.js','utf8'),context);
+  timerCount=2;assert.throws(()=>vm.runInContext('activateVerifiedLiveScheduler()',context),/EXACTLY_ONE/);
+  assert.equal(writes.length,0);timerCount=1;pending=true;
+  assert.throws(()=>vm.runInContext('activateVerifiedLiveScheduler()',context),/PENDING_EXECUTION/);
+  assert.equal(writes.length,0);pending=false;
+  vm.runInContext('activateVerifiedLiveScheduler()',context);
+  assert.deepEqual(writes,[['DISPATCH_MODE','live']]);
+  assert.ok(methods.every(m=>m==='get'));
+  assert.equal(logs[0],'LIVE_TIMER_ENABLED_GITHUB_REMAINS_SOLE_EXECUTOR');
+});
