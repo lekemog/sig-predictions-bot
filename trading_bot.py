@@ -495,6 +495,12 @@ class Runner:
             if (order.get('open') is not False or str(order.get('exchangeId')) != str(leg['exchangeId'])
                     or order.get('side') != 'no' or order.get('action') != 'buy'
                     or order.get('remainingQuantity') != 0):
+                print(json.dumps({'event': 'recovery_order_shape', 'order_id': oid,
+                                  'open': order.get('open'), 'exchange_id': order.get('exchangeId'),
+                                  'side': order.get('side'), 'action': order.get('action'),
+                                  'remaining_quantity': order.get('remainingQuantity'),
+                                  'quantity': order.get('quantity'), 'price_limit': order.get('priceLimit')},
+                                 allow_nan=False), flush=True)
                 raise Halt('Recovery order not verified terminal')
             fills = self.api.get(f'/orders/{oid}/fills?limit=100')
             if (fills.get('coverage', {}).get('complete') is not True
