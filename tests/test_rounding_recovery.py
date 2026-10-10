@@ -28,7 +28,7 @@ def fixture():
     def get(path):
         oid = int(path.split('/')[2]); leg = legs[oid-1]
         if '/fills' in path: return copy.deepcopy(fills[str(oid)])
-        return dict(leg, open=False, remainingQuantity=0)
+        return dict(leg, open=False, priceLimit=leg['price'])
     api.get.side_effect = get
     api.request.side_effect = AssertionError('Recovery must not POST or DELETE')
     return job, cfg, api
@@ -82,7 +82,7 @@ class RoundingRecoveryTests(unittest.TestCase):
         with self.assertRaises(Halt): self.run_recovery(change)
 
     def test_changed_fill_read_and_open_order_rejected_without_cancel(self):
-        for key,value in [('open',True),('side','yes')]:
+        for key,value in [('open',True),('side','yes'),('quantity',999),('priceLimit',.1)]:
             def change(j,a):
                 original=a.get.side_effect
                 def get(path):
