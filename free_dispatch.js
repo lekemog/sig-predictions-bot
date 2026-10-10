@@ -114,6 +114,40 @@ function freeDispatchTick(api, journal, mode, at, newId) {
   return 'DISPATCH_ACCEPTED'; // Acceptance is not successful screening.
 }
 
+// Return only bounded, known categories; never log remote bodies or exception text.
+function freeFailureCategory(error) {
+  if (error && Number.isInteger(error.httpCode) && error.httpCode >= 100 && error.httpCode <= 599) {
+    return 'GITHUB_HTTP_' + error.httpCode;
+  }
+  const allowed = ['INVALID_GITHUB_REQUEST', 'INVALID_RUN_LIST', 'WORKFLOW_DISABLED',
+    'INVALID_CHECKPOINT_ENCODING', 'CHECKPOINT_DISABLED_OR_INVALID',
+    'ACTIVE_RUN_LIST_INCOMPLETE', 'INVALID_CONFIGURATION', 'INVALID_DISPATCH_JOURNAL',
+    'CLOCK_MOVED_BACKWARDS', 'INVALID_HEARTBEAT'];
+  return error && allowed.includes(error.message) ? error.message : 'READ_OR_CONFIGURATION_UNAVAILABLE';
+}
+
+// Owner-invoked diagnostics: no dispatch, property writes or credential output.
+function diagnoseFreeScheduler() {
+  let phase = 'properties';
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const token = properties.getProperty('GITHUB_DISPATCH_TOKEN');
+    const api = freeDispatchApi((method, path, payload) => {
+      if (method !== 'GET' || payload !== undefined) throw new Error('INVALID_GITHUB_REQUEST');
+      phase = path.startsWith('/contents/') ? 'checkpoint' :
+        path.startsWith('/actions/runs?') ? 'active_runs' : 'workflow';
+      return freeGitHubRequest(method, path, payload, token,
+        (url, options) => UrlFetchApp.fetch(url, options));
+    }, text => Utilities.newBlob(Utilities.base64Decode(text)).getDataAsString('UTF-8'));
+    const result = api.status();
+    console.log(JSON.stringify({category: 'READS_VERIFIED', busy: result.busy,
+      mode: properties.getProperty('DISPATCH_MODE') || 'dry-run',
+      enabled: properties.getProperty('RUN_ENABLED') === 'true'}));
+  } catch (error) {
+    console.log(JSON.stringify({phase: phase, category: freeFailureCategory(error)}));
+  }
+}
+
 function sigFreeTick() {
   const at = Date.now();
   if (at >= SIG_FREE.cutoff) { console.log('CUTOFF'); return; }
@@ -134,7 +168,7 @@ function sigFreeTick() {
       write: record => properties.setProperty('LAST_DISPATCH', JSON.stringify(record))
     };
     console.log(freeDispatchTick(api, journal, mode, at, () => Utilities.getUuid()));
-  } catch (_) { console.log('READ_OR_CONFIGURATION_UNAVAILABLE'); }
+  } catch (error) { console.log(freeFailureCategory(error)); }
   finally { lock.releaseLock(); }
 }
 
@@ -157,4 +191,4 @@ function installDryRunTrigger() {
 }
 
 if (typeof module !== 'undefined') module.exports = {SIG_FREE, freeGitHubRequest,
-  freeDispatchApi, freeDispatchTick};
+  freeDispatchApi, freeDispatchTick, freeFailureCategory};

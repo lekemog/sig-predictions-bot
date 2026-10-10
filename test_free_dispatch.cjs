@@ -2,6 +2,18 @@ const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {SIG_FREE, freeGitHubRequest, freeDispatchApi, freeDispatchTick} = require('./free_dispatch.js');
 const at = Date.parse('2026-10-07T18:30:00Z');
+test('diagnostics distinguish bounded HTTP codes and known validation failures', () => {
+  const {freeFailureCategory} = require('./free_dispatch.js');
+  assert.equal(freeFailureCategory({httpCode:403}), 'GITHUB_HTTP_403');
+  assert.equal(freeFailureCategory(new Error('CHECKPOINT_DISABLED_OR_INVALID')), 'CHECKPOINT_DISABLED_OR_INVALID');
+});
+test('diagnostics never expose arbitrary exception content or unbounded status', () => {
+  const {freeFailureCategory} = require('./free_dispatch.js');
+  for (const error of [null, new Error('private-value'), {httpCode:'private-value'},
+    {httpCode:999, message:'private-value'}, {httpCode:200.5}]) {
+    assert.equal(freeFailureCategory(error), 'READ_OR_CONFIGURATION_UNAVAILABLE');
+  }
+});
 function fixture(record = null) {
   const f = {record, reads: 0, posts: 0, found: false, busy: false, state: {}, error: null};
   f.api = {find: () => f.found, status: () => { f.reads++; return {state:f.state, busy:f.busy}; },
@@ -79,4 +91,22 @@ test('incomplete active-run listing and disabled checkpoint fail closed', () => 
 test('bounded latest run search requires exact title', () => {
   const api=freeDispatchApi(()=>({workflow_runs:[{display_title:'SIG sweep [exact]'}]}));
   assert.equal(api.find('exact'),true);assert.equal(api.find('ex'),false);
+});
+
+test('owner diagnostics perform only reads and redact credential and remote error text', () => {
+  const vm = require('node:vm');
+  const fs = require('node:fs');
+  const logs = [], requests = [];
+  const context = {
+    console: {log: x => logs.push(x)},
+    PropertiesService: {getScriptProperties: () => ({getProperty: k => k === 'GITHUB_DISPATCH_TOKEN' ? 'fixture-private' : null})},
+    UrlFetchApp: {fetch: (url, options) => {
+      requests.push(options.method);
+      return {getResponseCode: () => 403, getContentText: () => 'fixture-private'};
+    }}, Utilities: {}
+  };
+  vm.runInNewContext(fs.readFileSync('free_dispatch.js','utf8') + '\ndiagnoseFreeScheduler();', context);
+  assert.deepEqual(requests,['get']);
+  assert.equal(logs[0],'{"phase":"workflow","category":"GITHUB_HTTP_403"}');
+  assert.equal(logs.some(x => x.includes('fixture-private')),false);
 });
