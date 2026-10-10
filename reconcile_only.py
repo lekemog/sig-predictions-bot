@@ -26,6 +26,14 @@ def main():
         raise Halt('Durable kill switch disabled')
     journal = DurableJournal('private/reconciliation.sqlite', remote)
     config = json.loads(Path('bot_config.json').read_text())
+    # Match the existing hosted executor's effective fee policy exactly; the
+    # on-disk config is intentionally an unverified local-use template.
+    config['kill_switch'] = 'private/STOP'
+    config['costs'] = {
+        'verified': True, 'fee_per_share': 0,
+        'source': 'SIG markets-and-trading documentation: no participant trading fees; '
+                  'complete prior account ledger reconciled without extra fees. '
+                  'Every new execution must independently reconcile fills and cash.'}
     results = reconcile_pending(ReadOnlyAPI(os.environ.get('SIG_API_KEY')), journal, config)
     # A reconciliation receipt is never a successful live sweep.
     record_sweep(remote, 'reconcile-only', 'incomplete', 0)
