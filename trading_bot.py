@@ -16,6 +16,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 
 from decision_engine import evaluate, executable, timestamp
@@ -402,6 +403,32 @@ def directional_plan(api, state, config, supplied):
             'conservative_limit_edge': conservative}
 
 
+def reconcile_cash(job, config):
+    """Use decimal API amounts; preserve the existing one-cent allowance exactly."""
+    def amount(value):
+        result = Decimal(str(value))
+        if not result.is_finite():
+            raise Halt('Non-finite reconciliation amount')
+        return result
+    expected, shares = Decimal('0'), Decimal('0')
+    results = sorted(job['response']['results'], key=lambda r: r['index'])
+    pairs = [(leg, job.get('fills', {}).get(str(result['data'].get('orderId')), {}))
+             for result, leg in zip(results, job['request']['legs'])]
+    pairs += [(r['request'], r['fills']) for r in job['repairs']]
+    for leg, projection in pairs:
+        for fill in projection.get('data', []):
+            q = abs(amount(fill['quantity']))
+            expected += (1 if leg['action'] == 'sell' else -1) * q * amount(fill['price'])
+            shares += q
+    change = amount(job['after']['cash']) - amount(job['before']['cash'])
+    extra = expected - change
+    allowance = shares * amount(config['costs']['fee_per_share']) + Decimal('.01')
+    if extra < Decimal('-.01') or extra > allowance:
+        raise Halt('Fill/cash costs do not reconcile to verified fee allowance')
+    job['cash_change'], job['observed_extra_cost'] = float(change), float(extra)
+    return extra
+
+
 class Runner:
     def __init__(self, api, journal, config, live=False):
         self.api, self.journal, self.config, self.live = api, journal, config, live
@@ -441,9 +468,76 @@ class Runner:
         self.journal.save(job, 'prepared')
         return self.finish(job)
 
+    def reconcile_rounding_halt(self, job):
+        """GET-only recovery of fully filled entries stopped by the legacy float bug."""
+        self.check_stop()
+        if (job['status'] != 'halted' or job.get('repairs') != []
+                or job['plan']['kind'] != 'basket_entry' or 'after' not in job
+                or self.config['costs']['fee_per_share'] != 0
+                or not .01 < job.get('observed_extra_cost', 0) < .010000001):
+            raise Halt('Unfinished repair requires reconciliation; no new orders')
+        checked = copy.deepcopy(job)
+        if reconcile_cash(checked, self.config) != Decimal('.01'):
+            raise Halt('Halt is not the verified one-cent float boundary')
+        legs = job['request']['legs']
+        results = sorted(job['response']['results'], key=lambda r: r['index'])
+        if [r['index'] for r in results] != list(range(len(legs))):
+            raise Halt('Incomplete recovery response')
+        ids = [str(l['exchangeId']) for l in legs]
+        if len(set(ids)) != len(ids) or len(ids) < 2:
+            raise Halt('Invalid recovery basket')
+        for result, leg in zip(results, legs):
+            if leg['side'] != 'no' or leg['action'] != 'buy' or leg['tournamentId'] != TID:
+                raise Halt('Unsupported recovery leg')
+            oid = result['data']['orderId']
+            order = self.api.get(f'/orders/{oid}')
+            order = order.get('data', order)
+            if (order.get('open') is not False or str(order.get('exchangeId')) != str(leg['exchangeId'])
+                    or order.get('side') != 'no' or order.get('action') != 'buy'
+                    or order.get('remainingQuantity') != 0):
+                raise Halt('Recovery order not verified terminal')
+            fills = self.api.get(f'/orders/{oid}/fills?limit=100')
+            if (fills.get('coverage', {}).get('complete') is not True
+                    or fills.get('pagination', {}).get('hasMore') is not False
+                    or str(fills.get('exchangeId')) != str(leg['exchangeId'])
+                    or fills.get('tournamentId') != TID or fills.get('orderId') != oid
+                    or fills.get('data') != job['fills'][str(oid)]['data']):
+                raise Halt('Recovery fills incomplete or changed')
+            quantities = [Decimal(str(f['quantity'])) for f in fills['data']]
+            if (any(q >= 0 or not q.is_finite() for q in quantities)
+                    or -sum(quantities) != Decimal(str(leg['quantity']))):
+                raise Halt('Recovery requires full original fills')
+        fresh = self.api.state()
+        if (fresh['orders'] or Decimal(str(fresh['cash'])) != Decimal(str(job['after']['cash']))
+                or signed_positions(fresh) != signed_positions(job['after'])):
+            raise Halt('Account changed since halted execution; manual reconciliation required')
+        before_q, after_q = signed_positions(job['before']), signed_positions(fresh)
+        expected_q = dict(before_q)
+        for leg in legs:
+            i = str(leg['exchangeId'])
+            expected_q[i] = expected_q.get(i, 0) - leg['quantity']
+        if expected_q != after_q:
+            raise Halt('Recovery position deltas do not match original fills')
+        for basket in self.config['baskets']:
+            if any(after_q.get(str(l['exchange_id']), 0) for l in basket['legs']):
+                validate_contracts(self.api, basket)
+        committed, race_cost, directional = portfolio_risk(fresh, self.config)
+        risk = risk_limits(self.config)
+        if (fresh['cash'] < risk['reserve'] or committed > risk['committed']
+                or any(c > risk['basket'] for c in race_cost.values()) or directional > risk['directional']):
+            raise Halt('Recovery exposure exceeds configured ceilings')
+        self.journal.event('rounding_reconciliation_verified', {'job': job['id'], 'at': fresh['at'],
+                           'dry_run': not self.live, 'orders_submitted': 0})
+        if self.live:
+            job.update(cash_change=checked['cash_change'], observed_extra_cost=checked['observed_extra_cost'])
+            self.journal.save(job, 'done')
+        return {'reconciled': job['id'], 'dry_run': not self.live, 'orders_submitted': 0}
+
     def finish(self, job):
         self.check_stop()
-        if job['status'] in ('halted', 'repairing'):
+        if job['status'] == 'halted':
+            return self.reconcile_rounding_halt(job)
+        if job['status'] == 'repairing':
             raise Halt('Unfinished repair requires reconciliation; no new orders')
         if 'response' not in job:
             # Includes restart after unknown outcome: reconcile fills/positions FIRST,
@@ -483,22 +577,7 @@ class Runner:
             if job['plan']['kind'].startswith('basket'):
                 after = self.repair(job, after)
             job['after'] = after
-            job['cash_change'] = after['cash'] - job['before']['cash']
-            expected_cash_change, filled_shares = 0., 0.
-            for result, leg in zip(results, job['request']['legs']):
-                oid = result['data'].get('orderId')
-                for fill in job.get('fills', {}).get(str(oid), {}).get('data', []):
-                    q = abs(float(fill['quantity']))
-                    expected_cash_change += (1 if leg['action'] == 'sell' else -1) * q * float(fill['price'])
-                    filled_shares += q
-            for repair in job['repairs']:
-                for fill in repair['fills']['data']:
-                    q = abs(float(fill['quantity']))
-                    expected_cash_change += (1 if repair['request']['action'] == 'sell' else -1) * q * float(fill['price'])
-                    filled_shares += q
-            job['observed_extra_cost'] = expected_cash_change - job['cash_change']
-            if (job['observed_extra_cost'] < -.01 or job['observed_extra_cost'] > filled_shares * float(self.config['costs']['fee_per_share']) + .01):
-                raise Halt('Fill/cash costs do not reconcile to verified fee allowance')
+            reconcile_cash(job, self.config)
             risk = risk_limits(self.config)
             if after['cash'] < risk['reserve']:
                 raise Halt('Cash reserve breached after fills')
@@ -575,7 +654,7 @@ class Runner:
         pending = self.journal.pending()
         if pending:
             if not self.live:
-                raise Halt('Pending live job exists; reconcile in live mode before further planning')
+                return [self.reconcile_rounding_halt(job) for job in pending]
             return [self.finish(job) for job in pending]
         state = self.api.state()
         self.journal.event('review', state)
