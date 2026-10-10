@@ -1,0 +1,24 @@
+name: Read-only rounding reconciliation
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: sig-portfolio-execution
+  cancel-in-progress: false
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Validate recovery safeguards
+        run: python -m unittest discover -s tests -v
+      - name: Verify closed fills and recover checkpoint without trading
+        env:
+          SIG_API_KEY: ${{ secrets.SIG_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python reconcile_only.py
