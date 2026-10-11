@@ -422,7 +422,7 @@ def cost_allowance(config):
     return fee + .005  # one extra tick per leg for implementation sensitivity
 
 
-def basket_plan(api, state, config, basket):
+def basket_plan(api, state, config, basket, entry_observer=None):
     risk = risk_limits(config)
     allowance = cost_allowance(config)
     contracts = validate_contracts(api, basket)
@@ -448,7 +448,10 @@ def basket_plan(api, state, config, basket):
             except Halt:
                 pass
             exit_q //= 2
-    if entry_proof_reason(basket, contracts) is not None:
+    proof_reason = entry_proof_reason(basket, contracts)
+    if proof_reason is not None:
+        if entry_observer is not None:
+            entry_observer(proof_reason)
         return None  # Entry quarantine must not suppress matched exits above.
     # Small default clip sized from displayed depth and surviving edge, not caps.
     q = min(qty(basket.get('clip', 100)), risk['clip'])
@@ -791,7 +794,9 @@ class Runner:
                 continue
             self.journal.event('checking', {'basket': basket['name']})
             try:
-                plan = basket_plan(self.api, state, self.config, basket)
+                plan = basket_plan(self.api, state, self.config, basket,
+                                   entry_observer=lambda reason: self.journal.event(
+                                       'entry_blocked', {'basket': basket['name'], 'reason': reason}))
                 if plan:
                     plans.append(plan)
                 self.journal.event('screened', {'basket': basket['name'], 'candidate': bool(plan)})
