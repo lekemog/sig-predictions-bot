@@ -27,6 +27,12 @@ SLUG = 'midterm-elections'
 END = datetime(2026, 11, 4, 17, tzinfo=timezone.utc)
 MAX_COMMITTED, RESERVE, BASKET_CAP = 25000, 75000, 5000
 DIRECTIONAL_RACE, DIRECTIONAL_TOTAL, FACTOR_CAP = 500, 5000, 2000
+# Entry quarantine from the settlement audit. Names and IDs prevent a renamed
+# basket from accidentally dropping the requirement. Exits/recovery are exempt.
+UNPROVEN_BASKETS = frozenset({'Nebraska Senate', 'Montana Senate', 'Kansas Senate',
+                             'PA Governor', 'Alaska Governor'})
+UNPROVEN_EXCHANGES = frozenset({'968', '969', '970', '963', '964', '965',
+                               '1045', '1046', '878', '879', '1057', '1058'})
 
 
 class Halt(RuntimeError):
@@ -35,6 +41,113 @@ class Halt(RuntimeError):
 
 def now():
     return datetime.now(timezone.utc)
+
+
+def contract_proof_hash(basket, contracts):
+    """Pin current API definitions AND the configured exchange/party mapping.
+
+    This is a metadata fingerprint, not proof that the API supplies full rules.
+    Full settlement-rule interpretation must also be reviewed in the manifest.
+    """
+    body = {'legs': basket['legs'], 'contracts': contracts}
+    return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(',', ':'),
+                                    allow_nan=False).encode()).hexdigest()
+
+
+def max_simultaneous_yes(candidate_rows, exchange_ids):
+    """Count YES legs per possible winner, including explicit other/write-in.
+
+    A category may contain several candidates; each gets a separate row. Stable
+    candidate IDs must identify people, not party labels or endorsements.
+    """
+    if not isinstance(candidate_rows, dict) or 'write_in_other' not in candidate_rows:
+        raise ValueError('Missing candidate matrix or other/write-in row')
+    allowed = set(exchange_ids)
+    counts = []
+    for candidate, matches in candidate_rows.items():
+        if (not isinstance(candidate, str) or not candidate
+                or not isinstance(matches, list)
+                or any(not isinstance(i, str) or i not in allowed for i in matches)
+                or len(set(matches)) != len(matches)):
+            raise ValueError('Invalid candidate-to-leg mapping')
+        counts.append(len(matches))
+    # A zero row is safe only with reviewed rules that exclude all unlisted
+    # winners from every configured category (checked by the proof gate).
+    if candidate_rows['write_in_other']:
+        raise ValueError('Other/write-in settlement mapping is unresolved')
+    return max(counts, default=0)
+
+
+def entry_proof_required(basket):
+    return (basket.get('entry_proof_required') is True
+            or basket['name'] in UNPROVEN_BASKETS
+            or any(str(l['exchange_id']) in UNPROVEN_EXCHANGES for l in basket['legs'])
+            or 'entry_proof' in basket)
+
+
+def entry_proof_reason(basket, contracts, at=None):
+    """Return a blocking reason; never halt held-basket exit/reconciliation.
+
+    Evidence is a reviewed repository input, not an automatically inferred
+    probability. Certification/completeness attestations require human research.
+    """
+    if not entry_proof_required(basket):
+        return None
+    try:
+        p = basket.get('entry_proof')
+        if not isinstance(p, dict) or p.get('schema_version') != 1:
+            return 'Missing reviewed candidate settlement proof'
+        if not isinstance(p.get('reviewer'), str) or not p['reviewer'].strip():
+            return 'Candidate settlement proof needs an identified reviewer'
+        if p.get('contract_hash') != contract_proof_hash(basket, contracts):
+            return 'Contract definitions or leg mapping changed'
+        current = at or now()
+        reviewed, expires = timestamp(p['reviewed_at']), timestamp(p['expires_at'])
+        if not reviewed <= current < expires <= reviewed + timedelta(hours=72):
+            return 'Candidate settlement proof expired or has invalid lifetime'
+        rules = p['rules_review']
+        if (rules.get('complete') is not True or rules.get('other_matches_zero') is not True
+                or not isinstance(rules.get('text'), str) or not rules['text'].strip()
+                or rules.get('sha256') != hashlib.sha256(rules['text'].encode()).hexdigest()
+                or not str(rules.get('source_url', '')).startswith('https://')):
+            return 'Full settlement rules and category mapping not reviewed'
+        rows = p['candidate_rows']
+        ids = [str(l['exchange_id']) for l in basket['legs']]
+        if max_simultaneous_yes(rows, ids) > 1:
+            return 'Candidate can resolve more than one leg YES'
+        candidates = p['certified_candidates']
+        if (p.get('enumeration_complete') is not True or not isinstance(candidates, list)
+                or not candidates or any(not isinstance(i, str) or not i for i in candidates)
+                or len(set(candidates)) != len(candidates)
+                or set(rows) != set(candidates) | {'write_in_other'}
+                or 'write_in_other' in candidates):
+            return 'Certified candidate enumeration is incomplete'
+        sources = p['sources']
+        if not isinstance(sources, list) or not sources:
+            return 'Official certification missing'
+        covered = set()
+        for s in sources:
+            if (s.get('tier') != 'A' or s.get('fetched') is not True
+                    or s.get('official') is not True or s.get('kind') != 'certification'
+                    or not str(s.get('url', '')).startswith('https://')
+                    or len(s.get('sha256', '')) != 64
+                    or any(c not in '0123456789abcdef' for c in s['sha256'])
+                    or not s.get('source_date')):
+                return 'Only fetched official certification supports new entries'
+            fetched = timestamp(s['fetched_at'])
+            if not current - timedelta(hours=72) <= fetched <= reviewed:
+                return 'Official certification fetch is stale or unreviewed'
+            source_date = datetime.strptime(s['source_date'], '%Y-%m-%d').date()
+            if source_date > fetched.date():
+                return 'Certification publication date is after its fetch'
+            if not isinstance(s.get('candidate_ids'), list):
+                return 'Certification does not enumerate candidates'
+            covered.update(s['candidate_ids'])
+        if covered != set(candidates):
+            return 'Certification coverage differs from candidate matrix'
+        return None
+    except (KeyError, TypeError, ValueError, OverflowError, AttributeError, Halt):
+        return 'Malformed candidate settlement proof'
 
 
 def tick(price):
@@ -309,7 +422,7 @@ def cost_allowance(config):
     return fee + .005  # one extra tick per leg for implementation sensitivity
 
 
-def basket_plan(api, state, config, basket):
+def basket_plan(api, state, config, basket, entry_observer=None):
     risk = risk_limits(config)
     allowance = cost_allowance(config)
     contracts = validate_contracts(api, basket)
@@ -335,6 +448,11 @@ def basket_plan(api, state, config, basket):
             except Halt:
                 pass
             exit_q //= 2
+    proof_reason = entry_proof_reason(basket, contracts)
+    if proof_reason is not None:
+        if entry_observer is not None:
+            entry_observer(proof_reason)
+        return None  # Entry quarantine must not suppress matched exits above.
     # Small default clip sized from displayed depth and surviving edge, not caps.
     q = min(qty(basket.get('clip', 100)), risk['clip'])
     while q > 0:
@@ -439,6 +557,13 @@ class Runner:
 
     def submit(self, plan, state):
         self.check_stop()
+        if plan.get('kind') == 'basket_entry':
+            baskets = [b for b in self.config['baskets'] if b['name'] == plan.get('name')]
+            if len(baskets) != 1 or baskets[0]['legs'] != plan.get('legs'):
+                raise Halt('Basket entry does not match current configuration')
+            reason = entry_proof_reason(baskets[0], plan.get('contracts', []))
+            if reason:
+                raise Halt(reason)  # Before journal intent or any POST.
         if qty(plan['quantity']) > risk_limits(self.config)['clip']:
             raise Halt('Execution clip exceeds configured matched shares')
         legs, prices = plan.get('legs'), plan.get('prices')
@@ -669,7 +794,9 @@ class Runner:
                 continue
             self.journal.event('checking', {'basket': basket['name']})
             try:
-                plan = basket_plan(self.api, state, self.config, basket)
+                plan = basket_plan(self.api, state, self.config, basket,
+                                   entry_observer=lambda reason: self.journal.event(
+                                       'entry_blocked', {'basket': basket['name'], 'reason': reason}))
                 if plan:
                     plans.append(plan)
                 self.journal.event('screened', {'basket': basket['name'], 'candidate': bool(plan)})
