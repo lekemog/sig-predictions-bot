@@ -1,4 +1,8 @@
 {
+    "risk_limits": {
+          "committed": 75000,
+          "reserve": 25000
+    },
   "costs": {
     "verified": false,
     "source": "",
