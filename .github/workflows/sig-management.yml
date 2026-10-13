@@ -2,7 +2,7 @@ name: SIG hourly management
 run-name: SIG sweep [${{ inputs.trigger_id || github.event_name }}]
 on:
   schedule:
-    - cron: '11,31,51 * * * *'
+    - cron: '1,11,21,31,41,51 * * * *'
   workflow_dispatch:
     inputs:
       mode:
