@@ -1,8 +1,11 @@
 {
-    "risk_limits": {
-          "committed": 75000,
-          "reserve": 25000
-    },
+  "risk_limits": {
+    "committed": 75000,
+    "reserve": 25000,
+    "race": 1500,
+    "directional": 15000,
+    "factor": 6000
+  },
   "costs": {
     "verified": false,
     "source": "",
