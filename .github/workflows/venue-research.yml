@@ -1,0 +1,33 @@
+name: Cross-venue research scan
+on:
+  schedule:
+    - cron: '3,13,23,33,43,53 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: sig-public-venue-research
+  cancel-in-progress: false
+jobs:
+  collect:
+    if: ${{ github.event.schedule != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Validate research collector
+        run: python -m unittest test_venue_scan test_cross_venue_research -v
+      - name: Collect public catalogs and election books
+        run: python venue_scan.py
+      - name: Preserve timestamped observations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: venue-observations-${{ github.run_id }}
+          path: venue_observations.json
+          retention-days: 21
+          if-no-files-found: warn
