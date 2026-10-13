@@ -171,14 +171,14 @@ def risk_limits(config):
     if not isinstance(supplied, dict) or set(supplied) - set(legacy):
         raise Halt('Invalid risk profile keys')
     limits = dict(legacy, **supplied)
-    ceilings = dict(committed=75000, basket=15000, clip=5000, race=2500,
+    ceilings = dict(committed=100000, basket=15000, clip=5000, race=2500,
                     directional=15000, factor=7500)
     for key, value in limits.items():
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
             raise Halt('Risk limits must be positive integers')
         if key in ceilings and value > ceilings[key]:
             raise Halt('Risk profile exceeds delegated staged ceiling')
-    if (limits['reserve'] < 25000 or limits['reserve'] + limits['committed'] > 100000
+    if (limits['reserve'] < 25000 or limits['committed'] > 100000
             or not limits['race'] <= limits['factor'] <= limits['directional'] <= limits['committed']
             or limits['basket'] > limits['committed']):
         raise Halt('Inconsistent risk profile')

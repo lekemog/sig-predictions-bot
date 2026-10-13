@@ -7,6 +7,8 @@ import urllib.request
 from pathlib import Path
 
 from trading_bot import API, END, Halt, Journal, Runner, now
+from research_runner import ReadOnlyAPI, collect
+from market_brain import BrainStore
 
 
 class RepositoryState:
@@ -134,6 +136,30 @@ def main():
         record_sweep(remote, 'live' if runner.live else 'dry-run', status, screened_count)
         journal.event('hosted_result', result)
         print(json.dumps(result, allow_nan=False), flush=True)
+        # Same executor/concurrency lock; research never provides orders/cases.
+        # Reconciliation always runs first. Pending-only cycles skip discovery.
+        if status == 'success' and not journal.pending():
+            try:
+                store = BrainStore('private/universe.sqlite')
+                snapshot = collect(ReadOnlyAPI(os.environ.get('SIG_API_KEY'), store), {}, 3)
+                remote.data['last_universe_scan'] = {
+                    'at': snapshot['at'], 'status': 'success',
+                    'catalog_count': snapshot['catalog_count'],
+                    'exchange_count': snapshot['exchange_count'],
+                    'relationship_count': snapshot['relationship_count'],
+                    'universe_discovery_complete': snapshot['universe_discovery_complete'],
+                    'catalog': snapshot['exchange_catalog'],
+                    'leads': snapshot['relations'], 'read_failures': snapshot['read_failures'],
+                    'orders_submitted': 0, 'execution_authorized': False}
+                journal.event('universe_screened', {
+                    k: v for k, v in remote.data['last_universe_scan'].items()
+                    if k not in ('catalog', 'leads')})
+            except (Halt, ValueError, KeyError, TypeError) as error:
+                remote.data['last_universe_scan'] = {
+                    'at': now().isoformat(), 'status': 'incomplete',
+                    'universe_discovery_complete': False, 'reason': str(error),
+                    'orders_submitted': 0, 'execution_authorized': False}
+                journal.event('universe_incomplete', remote.data['last_universe_scan'])
     except BaseException:
         # Fail closed. An unresolved job remains in the remote checkpoint.
         _, screened_count = cycle_screening(journal, start_rowid, config['baskets'])

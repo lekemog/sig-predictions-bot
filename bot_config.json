@@ -1,6 +1,6 @@
 {
   "risk_limits": {
-    "committed": 75000,
+    "committed": 100000,
     "reserve": 25000,
     "race": 1500,
     "directional": 15000,

@@ -4,7 +4,7 @@
  */
 const SIG_FREE = Object.freeze({
   repo: 'lekemog/sig-predictions-bot', workflow: 'sig-management.yml',
-  cutoff: Date.parse('2026-11-04T17:00:00Z'), interval: 3600000,
+  cutoff: Date.parse('2026-11-04T17:00:00Z'), interval: 600000,
   active: ['queued', 'in_progress', 'waiting', 'pending', 'requested']
 });
 
