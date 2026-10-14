@@ -448,6 +448,10 @@ def basket_plan(api, state, config, basket, entry_observer=None):
             except Halt:
                 pass
             exit_q //= 2
+    if config.get('entries_paused', False) is not False:
+        if entry_observer is not None:
+            entry_observer('New entries paused for drawdown review')
+        return None  # Keep held-contract checks and matched exits above active.
     proof_reason = entry_proof_reason(basket, contracts)
     if proof_reason is not None:
         if entry_observer is not None:
@@ -479,6 +483,8 @@ def basket_plan(api, state, config, basket, entry_observer=None):
 
 
 def directional_plan(api, state, config, supplied):
+    if config.get('entries_paused', False) is not False:
+        return None
     risk = risk_limits(config)
     c = copy.deepcopy(supplied)
     if c['trade']['side'] not in ('yes', 'no'):
@@ -557,6 +563,9 @@ class Runner:
 
     def submit(self, plan, state):
         self.check_stop()
+        if (self.config.get('entries_paused', False) is not False
+                and plan.get('kind') != 'basket_exit'):
+            raise Halt('New entries paused for drawdown review')
         if plan.get('kind') == 'basket_entry':
             baskets = [b for b in self.config['baskets'] if b['name'] == plan.get('name')]
             if len(baskets) != 1 or baskets[0]['legs'] != plan.get('legs'):

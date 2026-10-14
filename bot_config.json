@@ -1,4 +1,5 @@
 {
+  "entries_paused": true,
   "risk_limits": {
     "committed": 100000,
     "reserve": 25000,
