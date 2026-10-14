@@ -60,3 +60,16 @@ bookmaker odds are unavailable to this review, so no net-edge ranking is made.
 
 Google Apps Script installed timer/deployment remains unverified; this cycle
 confirms native GitHub scheduled execution, not a fresh Google trigger audit.
+
+## Oversight refresh — 14 October, 13:40 BST
+
+GitHub connector returned 404; authorized signed-in browser access succeeded. No oversight dispatches or order operations.
+
+Live scheduled run https://github.com/lekemog/sig-predictions-bot/actions/runs/38560441539 used ce689b12873e552d8f9937c40b1483c8f8fac735. Checkpoint 0ccf685: last_successful_live_sweep 2026-10-14T12:00:21.678989+00:00, success, 12 baskets; all 12 current-cycle screened. NO_TRADE, 25 done / 5 dry_run journals, no unresolved jobs. Review 11:59:16 UTC: cash 65121.31, orders [], basis 34913.19, account value 99816.41, period P&L -183.59, unrealized -218.09. Same valuation already reported, not a new mark. All held baskets matched; each basis below 5000. No tested whole-basket exit reached the normal payout floor.
+
+Config: entries_paused=true; committed 100000, reserve 25000, race 1500, directional 15000, factor 6000. Defensive gates 250 shares, 1000 initial cost, 3% settlement ROI, 1% round-trip loss, account floor 99750. Costs unverified in config. No controls changed. Universe discovery 12:00:24 UTC: 237 records, complete discovery, zero relationship leads/submissions. Live scope remains 12 baskets; catalog completeness is not all-market executable-price/settlement verification.
+
+Venue run https://github.com/lekemog/sig-predictions-bot/actions/runs/38559349195 collected 11:50:08–11:52:48 UTC on 8077cd0. Status partial: 300 / 1066 candidate books, Kalshi discovery runtime budget reached, Polymarket HTTP 422 at offset 2100. Coverage false; comparison UNKNOWN, calibrated probability null. Scheduled venue runs at 02:16, 07:12 and 12:49 BST do not establish ten-minute cadence. Exact reviewed settlement mappings, synchronized SIG books, verified venue quote timestamps and calibrated integration remain blockers. Installed Google timer/trigger and paper-turnover checkpoint not accessed; current state unknown.
+
+Two targeted news queries and primary retrieval found Suffolk Maine release indexed 14 October: fieldwork 8–11 October, 500 likely voters, Jackson 49%, Collins 47%, undecided 3.8%, refused 0.2%. Original: https://www.suffolk.edu/-/media/suffolk/documents/academics/research-at-suffolk/suprc/polls/other-states/2026/10_14_2026_maine_statewide_marginals.pdf?hash=7FCED62D765CBEF2DB2EFD7ADF0213034C981FE0&la=en
+No Maine contract in retrieved SIG universe; not executable or held. No win probability inferred. NC SurveyUSA original report again empty; secondary toplines unverified. Marist Texas already reported; direct release retrieval failed this run. No new actionable net-EV opportunity. Probability bounds and complete bookmaker odds UNKNOWN. Sensitivities: turnout, undecideds, design effects, correlated poll errors. No no-vig normalization or invented blending weights. Research only.
