@@ -422,6 +422,47 @@ def cost_allowance(config):
     return fee + .005  # one extra tick per leg for implementation sensitivity
 
 
+def defensive_entry_reason(state, config, basket, contracts):
+    """Entry-only controls; held exits and recovery remain independent."""
+    policy = config.get('defensive_entries')
+    if policy is None:
+        return None
+    if not isinstance(policy, dict) or policy.get('enabled') is not True:
+        return 'Defensive entry policy missing or disabled'
+    required = ('account_value_floor', 'max_entry_clip', 'max_new_basket_cost',
+                'min_settlement_roi', 'max_round_trip_loss_fraction')
+    if any(isinstance(policy.get(k), bool) or not isinstance(policy.get(k), (int, float))
+           or not math.isfinite(policy[k]) or policy[k] <= 0 for k in required):
+        return 'Invalid defensive entry budgets'
+    if (not isinstance(policy['max_entry_clip'], int) or policy['max_entry_clip'] > 250
+            or policy['max_new_basket_cost'] > 1000 or policy['min_settlement_roi'] < .03
+            or policy['max_round_trip_loss_fraction'] > .01):
+        return 'Defensive policy exceeds tightened ceilings'
+    pnl = state.get('pnl', {})
+    value = pnl.get('totalAccountValue')
+    if (isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(value) or value < policy['account_value_floor']):
+        return 'Account value missing or below defensive entry floor'
+    ids = {str(l['exchange_id']) for l in basket['legs']}
+    if any(str(p['exchangeId']) in ids and p['quantity'] for p in state['positions']):
+        return 'Defensive policy prohibits adding to a held basket'
+    reviewed = dict(basket, entry_proof_required=True)
+    return entry_proof_reason(reviewed, contracts)
+
+
+def defensive_price_reason(config, quantity, spend, floor, liquidation):
+    policy = config.get('defensive_entries')
+    if policy is None:
+        return None
+    if quantity > policy['max_entry_clip'] or spend > policy['max_new_basket_cost']:
+        return 'Defensive initial position limit exceeded'
+    if floor - spend < spend * policy['min_settlement_roi'] - 1e-8:
+        return 'Conditional settlement margin below defensive minimum'
+    if spend - liquidation > spend * policy['max_round_trip_loss_fraction'] + 1e-8:
+        return 'Executable round-trip loss exceeds defensive budget'
+    return None
+
+
 def basket_plan(api, state, config, basket, entry_observer=None):
     risk = risk_limits(config)
     allowance = cost_allowance(config)
@@ -431,6 +472,23 @@ def basket_plan(api, state, config, basket, entry_observer=None):
     held = -positions.get(str(basket['legs'][0]['exchange_id']), 0)
     books = fresh_books(api, basket['legs'])
     n = len(basket['legs'])
+    if entry_observer is not None and held > 0:
+        ids = {str(l['exchange_id']) for l in basket['legs']}
+        rows = [p for p in state['positions'] if str(p['exchangeId']) in ids]
+        clip = min(int(held), risk['clip'])
+        try:
+            liquidation = clip * (sum(price_for(books[str(l['exchange_id'])], 'no', 'sell', clip)[0]
+                                      for l in basket['legs']) - n * allowance)
+        except Halt:
+            liquidation = None
+        entry_observer({'event': 'held_basket_diagnostic', 'basket': basket['name'],
+                        'account_at': state['at'], 'matched_shares': held,
+                        'cost_basis': sum(float(p['costBasis']) for p in rows),
+                        'marked_value': sum(float(p.get('marketValue', 0)) for p in rows),
+                        'conditional_floor': held * (n - 1), 'tested_exit_clip': clip,
+                        'net_exit_limit_proceeds': liquidation,
+                        'exit_floor': clip * (n - 1),
+                        'floor_is_conditional_not_realized_profit': True})
     if held > 0:
         # A thin book must not hide a profitable matched partial exit. Try the
         # complete holding first, then smaller balanced clips; preserve the hedge.
@@ -452,13 +510,16 @@ def basket_plan(api, state, config, basket, entry_observer=None):
         if entry_observer is not None:
             entry_observer('New entries paused for drawdown review')
         return None  # Keep held-contract checks and matched exits above active.
-    proof_reason = entry_proof_reason(basket, contracts)
+    proof_reason = (defensive_entry_reason(state, config, basket, contracts)
+                    or entry_proof_reason(basket, contracts))
     if proof_reason is not None:
         if entry_observer is not None:
             entry_observer(proof_reason)
         return None  # Entry quarantine must not suppress matched exits above.
     # Small default clip sized from displayed depth and surviving edge, not caps.
     q = min(qty(basket.get('clip', 100)), risk['clip'])
+    if config.get('defensive_entries') is not None:
+        q = min(q, qty(config['defensive_entries']['max_entry_clip']))
     while q > 0:
         try:
             limits = [price_for(books[str(l['exchange_id'])], 'no', 'buy', q)[0] for l in basket['legs']]
@@ -467,6 +528,19 @@ def basket_plan(api, state, config, basket, entry_observer=None):
             continue
         spend = q * (sum(limits) + n * allowance)
         profit = q * (n - 1) - spend
+        if config.get('defensive_entries') is not None:
+            try:
+                sell_limits = [price_for(books[str(l['exchange_id'])], 'no', 'sell', q)[0]
+                               for l in basket['legs']]
+                liquidation = q * (sum(sell_limits) - n * allowance)
+            except Halt:
+                liquidation = -float('inf')
+            reason = defensive_price_reason(config, q, spend, q * (n - 1), liquidation)
+            if reason:
+                if entry_observer is not None:
+                    entry_observer(reason)
+                q //= 2
+                continue
         if profit < max(1., q * .01):
             q //= 2
             continue
@@ -483,6 +557,8 @@ def basket_plan(api, state, config, basket, entry_observer=None):
 
 
 def directional_plan(api, state, config, supplied):
+    if config.get('defensive_entries') is not None:
+        return None  # No validated directional adapter under defensive operation.
     if config.get('entries_paused', False) is not False:
         return None
     risk = risk_limits(config)
@@ -566,13 +642,22 @@ class Runner:
         if (self.config.get('entries_paused', False) is not False
                 and plan.get('kind') != 'basket_exit'):
             raise Halt('New entries paused for drawdown review')
+        if (self.config.get('defensive_entries') is not None
+                and plan.get('kind') not in ('basket_entry', 'basket_exit')):
+            raise Halt('Defensive policy disables directional submissions')
         if plan.get('kind') == 'basket_entry':
             baskets = [b for b in self.config['baskets'] if b['name'] == plan.get('name')]
             if len(baskets) != 1 or baskets[0]['legs'] != plan.get('legs'):
                 raise Halt('Basket entry does not match current configuration')
-            reason = entry_proof_reason(baskets[0], plan.get('contracts', []))
+            reason = (defensive_entry_reason(state, self.config, baskets[0], plan.get('contracts', []))
+                      or entry_proof_reason(baskets[0], plan.get('contracts', [])))
             if reason:
                 raise Halt(reason)  # Before journal intent or any POST.
+            if self.config.get('defensive_entries') is not None:
+                fresh = basket_plan(self.api, state, self.config, baskets[0])
+                if (fresh is None or fresh['kind'] != 'basket_entry'
+                        or any(fresh.get(k) != plan.get(k) for k in ('quantity', 'legs', 'prices'))):
+                    raise Halt('Defensive entry failed fresh executable-price validation')
         if qty(plan['quantity']) > risk_limits(self.config)['clip']:
             raise Halt('Execution clip exceeds configured matched shares')
         legs, prices = plan.get('legs'), plan.get('prices')

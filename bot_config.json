@@ -222,5 +222,13 @@
         }
       ]
     }
-  ]
+  ],
+  "defensive_entries": {
+    "enabled": true,
+    "account_value_floor": 99750,
+    "max_entry_clip": 250,
+    "max_new_basket_cost": 1000,
+    "min_settlement_roi": 0.03,
+    "max_round_trip_loss_fraction": 0.01
+  }
 }

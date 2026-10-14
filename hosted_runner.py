@@ -134,6 +134,14 @@ def main():
         result = runner.cycle()
         status, screened_count = cycle_screening(journal, start_rowid, config['baskets'])
         record_sweep(remote, 'live' if runner.live else 'dry-run', status, screened_count)
+        # Keep account and diagnostics independently of bounded event history.
+        reviews = list(journal.db.execute("SELECT body FROM events WHERE rowid > ? AND kind = 'review' ORDER BY rowid DESC LIMIT 1", (start_rowid,)))
+        if reviews:
+            remote.data['latest_portfolio_review'] = json.loads(reviews[0][0])
+        diagnostics = [json.loads(body) for (body,) in journal.db.execute(
+            "SELECT body FROM events WHERE rowid > ? AND kind = 'entry_blocked'", (start_rowid,))]
+        remote.data['latest_basket_diagnostics'] = [d['reason'] for d in diagnostics
+            if isinstance(d.get('reason'), dict) and d['reason'].get('event') == 'held_basket_diagnostic']
         journal.event('hosted_result', result)
         print(json.dumps(result, allow_nan=False), flush=True)
         # Same executor/concurrency lock; research never provides orders/cases.
