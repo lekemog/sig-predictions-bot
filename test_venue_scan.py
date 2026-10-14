@@ -40,6 +40,42 @@ class CollectorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             tokens({"clobTokenIds": "{}"})
 
+    def test_late_discovery_failure_preserves_prior_rows(self):
+        def fake(url):
+            if "offset=0" in url:
+                return [{"id": "1", "question": "Senate"}]
+            raise RuntimeError('HTTP 422')
+        rows, complete, reason = discover('polymarket', fake)
+        self.assertEqual(len(rows), 1)
+        self.assertFalse(complete)
+        self.assertIn('offset 100', reason)
+        self.assertIn('422', reason)
+
+    def test_partial_catalog_never_reports_complete_book_coverage(self):
+        def fake(url):
+            if 'kalshi' in url:
+                return {'markets': [], 'cursor': ''}
+            raise RuntimeError('HTTP 422')
+        result = scan(fake)
+        self.assertEqual(result['status'], 'partial')
+        self.assertFalse(result['book_coverage_complete'])
+        self.assertEqual(result['candidate_book_count'], 0)
+        self.assertEqual(result['comparison_status'], 'UNKNOWN')
+
+    def test_partial_catalog_can_still_collect_observed_books(self):
+        def fake(url):
+            if '/book?' in url:
+                return {'bids': [], 'asks': []}
+            if 'kalshi' in url:
+                return {'markets': [], 'cursor': ''}
+            if 'offset=0' in url:
+                return [{'id': '1', 'question': 'Senate', 'clobTokenIds': ['a']}]
+            raise RuntimeError('HTTP 422')
+        result = scan(fake)
+        self.assertEqual(result['catalogs']['polymarket']['count'], 1)
+        self.assertEqual(result['book_count'], 1)
+        self.assertFalse(result['book_coverage_complete'])
+
 
 if __name__ == "__main__":
     unittest.main()

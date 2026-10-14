@@ -34,7 +34,10 @@ def discover(venue, fetch=get, max_pages=250, deadline=None):
             if cursor:
                 params["cursor"] = cursor
             url = KALSHI + "/markets?" + urlencode(params)
-            data = fetch(url)
+            try:
+                data = fetch(url)
+            except Exception as exc:
+                return rows, False, f"Discovery request failed at page {page}: {exc}"
             batch = data.get("markets")
             cursor = data.get("cursor")
             if not isinstance(batch, list) or not isinstance(cursor, str):
@@ -42,7 +45,10 @@ def discover(venue, fetch=get, max_pages=250, deadline=None):
             done = not cursor
         elif venue == "polymarket":
             url = GAMMA + "/markets?" + urlencode({"active": "true", "closed": "false", "limit": 100, "offset": page * 100, "order": "id", "ascending": "true"})
-            batch = fetch(url)
+            try:
+                batch = fetch(url)
+            except Exception as exc:
+                return rows, False, f"Discovery request failed at offset {page * 100}: {exc}"
             if not isinstance(batch, list):
                 raise ValueError("Invalid Polymarket catalog response")
             done = not batch
@@ -93,6 +99,8 @@ def scan(fetch=get, max_books=300, runtime_seconds=420):
             discovery_deadline = min(deadline, time.monotonic() + runtime_seconds / 4)
             rows, complete, reason = discover(venue, fetch, deadline=discovery_deadline)
             result["catalogs"][venue] = {"rows": rows, "count": len(rows), "complete": complete, "limitation": reason}
+            if reason:
+                result["errors"].append({"venue": venue, "stage": "discovery", "error": reason})
         except Exception as exc:
             result["errors"].append({"venue": venue, "stage": "discovery", "error": str(exc)})
             result["catalogs"][venue] = {"rows": [], "count": 0, "complete": False}
@@ -128,7 +136,8 @@ def scan(fetch=get, max_books=300, runtime_seconds=420):
         except Exception as exc:
             result["errors"].append({"venue": venue, "market_id": market_id, "stage": "book", "error": str(exc)})
     result["book_count"] = len(result["books"])
-    result["book_coverage_complete"] = len(result["books"]) == len(tasks)
+    result["book_coverage_complete"] = (all(c["complete"] for c in result["catalogs"].values())
+                                        and len(result["books"]) == len(tasks))
     if result["errors"] or not all(c["complete"] for c in result["catalogs"].values()) or not result["book_coverage_complete"]:
         result["status"] = "partial"
     result["finished_at"] = now()
