@@ -20,6 +20,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from decision_engine import evaluate, executable, timestamp
+from turnover import dip_entry_reason, profit_exit_target
 
 BASE = 'https://sig.thesuper.market/api/v1'
 TID = 'bda92870-621e-47b0-bc3c-3602c5c26f55'
@@ -498,6 +499,20 @@ def basket_plan(api, state, config, basket, entry_observer=None):
                 limits = [price_for(books[str(l['exchange_id'])], 'no', 'sell', exit_q)[0]
                           for l in basket['legs']]
                 proceeds = exit_q * (sum(limits) - n * allowance)
+                turnover = config.get('turnover', {})
+                target = profit_exit_target(state, basket, exit_q, turnover)
+                if target and proceeds >= target['net_proceeds_target']:
+                    if entry_observer is not None:
+                        entry_observer({'event': 'turnover_exit_candidate', 'basket': basket['name'],
+                                        'quantity': exit_q, 'net_proceeds': proceeds, **target,
+                                        'execution_enabled': turnover.get('mode') == 'live'})
+                    if turnover.get('mode') == 'live':
+                        return {'kind': 'basket_exit', 'name': basket['name'], 'action': 'sell',
+                                'quantity': exit_q, 'legs': basket['legs'], 'prices': limits,
+                                'value_floor': target['net_proceeds_target'],
+                                'normal_settlement_floor': exit_q * (n - 1),
+                                'net_limit_proceeds': proceeds, 'contracts': contracts,
+                                'exit_method': 'cost_based_profit_take', **target}
                 if proceeds >= exit_q * (n - 1):
                     return {'kind': 'basket_exit', 'name': basket['name'], 'action': 'sell',
                             'quantity': exit_q, 'legs': basket['legs'], 'prices': limits,
@@ -544,6 +559,11 @@ def basket_plan(api, state, config, basket, entry_observer=None):
         if profit < max(1., q * .01):
             q //= 2
             continue
+        dip_reason = dip_entry_reason(config, basket, contract_proof_hash(basket, contracts), q, spend, now())
+        if dip_reason:
+            if entry_observer is not None:
+                entry_observer(dip_reason)
+            return None
         if (committed + spend <= risk['committed'] and costs[basket['name']] + spend <= risk['basket']
                 and state['cash'] - spend >= risk['reserve']):
             return {'kind': 'basket_entry', 'name': basket['name'], 'action': 'buy', 'quantity': q,
@@ -658,6 +678,15 @@ class Runner:
                 if (fresh is None or fresh['kind'] != 'basket_entry'
                         or any(fresh.get(k) != plan.get(k) for k in ('quantity', 'legs', 'prices'))):
                     raise Halt('Defensive entry failed fresh executable-price validation')
+        if plan.get('exit_method') == 'cost_based_profit_take':
+            baskets = [b for b in self.config['baskets'] if b['name'] == plan.get('name')]
+            if len(baskets) != 1 or self.config.get('turnover', {}).get('mode') != 'live':
+                raise Halt('Turnover exit is not enabled for this basket')
+            fresh = basket_plan(self.api, state, self.config, baskets[0])
+            if (fresh is None or fresh.get('exit_method') != 'cost_based_profit_take'
+                    or any(fresh.get(k) != plan.get(k) for k in
+                           ('quantity', 'legs', 'prices', 'allocated_cost_basis', 'net_proceeds_target'))):
+                raise Halt('Turnover exit failed fresh price and cost-basis validation')
         if qty(plan['quantity']) > risk_limits(self.config)['clip']:
             raise Halt('Execution clip exceeds configured matched shares')
         legs, prices = plan.get('legs'), plan.get('prices')

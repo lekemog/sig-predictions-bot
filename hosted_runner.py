@@ -9,6 +9,7 @@ from pathlib import Path
 from trading_bot import API, END, Halt, Journal, Runner, now
 from research_runner import ReadOnlyAPI, collect
 from market_brain import BrainStore
+from dip_monitor import scan as scan_dips
 
 
 class RepositoryState:
@@ -131,6 +132,25 @@ def main():
                     live=os.environ.get('SIG_MODE', 'dry-run') == 'live')
     start_rowid = journal.db.execute('SELECT COALESCE(MAX(rowid), 0) FROM events').fetchone()[0]
     try:
+        if not journal.pending():
+            # The same executor owns all scheduling/checkpoints. Dip sampling
+            # remains GET-only while entries are paused; never dispatch a second
+            # runner or translate observations into orders.
+            try:
+                history, observation = scan_dips(
+                    runner.api, runner.api.state(), config,
+                    remote.data.get('dip_quote_history', {}))
+                remote.data['dip_quote_history'] = history
+                remote.data['latest_dip_scan'] = observation
+                config['_dip_scan'] = observation
+                journal.event('dip_scan', {k: v for k, v in observation.items() if k != 'baskets'})
+                print(json.dumps({'dip_scan': observation}, allow_nan=False), flush=True)
+            except (Halt, ValueError, KeyError, TypeError) as error:
+                remote.data['dip_quote_history'] = {}
+                remote.data['latest_dip_scan'] = {
+                    'at': now().isoformat(), 'status': 'failed',
+                    'reason': str(error), 'execution_enabled': False, 'orders_submitted': 0}
+                journal.event('dip_scan_failed', remote.data['latest_dip_scan'])
         result = runner.cycle()
         status, screened_count = cycle_screening(journal, start_rowid, config['baskets'])
         record_sweep(remote, 'live' if runner.live else 'dry-run', status, screened_count)
@@ -142,6 +162,8 @@ def main():
             "SELECT body FROM events WHERE rowid > ? AND kind = 'entry_blocked'", (start_rowid,))]
         remote.data['latest_basket_diagnostics'] = [d['reason'] for d in diagnostics
             if isinstance(d.get('reason'), dict) and d['reason'].get('event') == 'held_basket_diagnostic']
+        remote.data['latest_turnover_candidates'] = [d['reason'] for d in diagnostics
+            if isinstance(d.get('reason'), dict) and d['reason'].get('event') == 'turnover_exit_candidate']
         journal.event('hosted_result', result)
         print(json.dumps(result, allow_nan=False), flush=True)
         # Same executor/concurrency lock; research never provides orders/cases.

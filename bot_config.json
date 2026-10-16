@@ -230,5 +230,22 @@
     "max_new_basket_cost": 1000,
     "min_settlement_roi": 0.03,
     "max_round_trip_loss_fraction": 0.01
+  },
+  "dip_monitor": {
+    "enabled": true,
+    "mode": "observe",
+    "quantity": 250,
+    "lookback_hours": 24,
+    "min_samples": 3,
+    "min_span_minutes": 20,
+    "min_gap_seconds": 300,
+    "max_quote_age_seconds": 60,
+    "max_gap_minutes": 90,
+    "min_drop_per_matched_share": 0.02
+  },
+  "turnover": {
+    "mode": "observe",
+    "profit_fraction": 0.005,
+    "min_profit": 1
   }
 }
