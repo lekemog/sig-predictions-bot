@@ -443,9 +443,11 @@ def arb_policy(config):
            'p_double_yes': p.get('p_double_yes', .002),
            'leg_buffer': p.get('leg_buffer', 'empirical'),
            'redeploy_haircut': p.get('redeploy_haircut', .5),
-           'universe_races_per_sweep': p.get('universe_races_per_sweep', 0)}
+           'universe_races_per_sweep': p.get('universe_races_per_sweep', 0),
+           'max_jobs_per_run': p.get('max_jobs_per_run', 1)}
     bounds = {'min_edge_per_share': (0, .05), 'min_profit': (0, 100), 'p_double_yes': (0, .05),
-              'redeploy_haircut': (0, 1), 'universe_races_per_sweep': (0, 200)}
+              'redeploy_haircut': (0, 1), 'universe_races_per_sweep': (0, 200),
+              'max_jobs_per_run': (1, 5)}
     for k, (lo, hi) in bounds.items():
         v = out[k]
         if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or not lo <= v <= hi:

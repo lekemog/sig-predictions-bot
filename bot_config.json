@@ -247,6 +247,7 @@
     "p_double_yes": 0.002,
     "leg_buffer": "empirical",
     "redeploy_haircut": 0.5,
-    "universe_races_per_sweep": 20
+    "universe_races_per_sweep": 20,
+    "max_jobs_per_run": 3
   }
 }
