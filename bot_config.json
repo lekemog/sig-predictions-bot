@@ -224,7 +224,7 @@
     }
   ],
   "dip_monitor": {
-    "enabled": true,
+    "enabled": false,
     "mode": "observe",
     "quantity": 250,
     "lookback_hours": 24,
@@ -247,6 +247,6 @@
     "p_double_yes": 0.002,
     "leg_buffer": "empirical",
     "redeploy_haircut": 0.5,
-    "universe_races_per_sweep": 40
+    "universe_races_per_sweep": 20
   }
 }
