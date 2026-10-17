@@ -146,6 +146,26 @@ def remember_auto_baskets(config, data):
     data['auto_baskets'] = list(known.values())
 
 
+def run_cycles(runner, config, data):
+    """Repeat full fresh cycles while each one completes a live trade.
+
+    GitHub drops most scheduled runs, so one trade per run starves the arb.
+    Every cycle re-reads the account, re-validates contracts and rebuilds prices;
+    nothing carries over except the persisted journal and remembered baskets.
+    """
+    policy = arb_policy(config)
+    limit = int(policy['max_jobs_per_run']) if policy else 1
+    results = []
+    for _ in range(limit):
+        result = runner.cycle()
+        results.extend(result)
+        if runner.live:
+            remember_auto_baskets(config, data)
+        if not (runner.live and result and isinstance(result[0], dict) and 'completed' in result[0]):
+            break
+    return results
+
+
 def arb_summary(journal, start_rowid):
     rows = journal.db.execute(
         "SELECT kind, body FROM events WHERE rowid > ? AND kind IN ('universe_prescreen', 'entry_blocked')",
@@ -205,9 +225,7 @@ def main():
                     'at': now().isoformat(), 'status': 'failed',
                     'reason': str(error), 'execution_enabled': False, 'orders_submitted': 0}
                 journal.event('dip_scan_failed', remote.data['latest_dip_scan'])
-        result = runner.cycle()
-        if runner.live:
-            remember_auto_baskets(config, remote.data)
+        result = run_cycles(runner, config, remote.data)
         remote.data['latest_arb_scan'] = arb_summary(journal, start_rowid)
         status, screened_count = cycle_screening(journal, start_rowid, config['baskets'])
         record_sweep(remote, 'live' if runner.live else 'dry-run', status, screened_count)

@@ -211,3 +211,21 @@ class HostedUniverseTests(unittest.TestCase):
         prepare_universe(cfg, data)
         self.assertEqual([b['name'] for b in cfg['baskets']], ['test', 'Auto Race'])
         self.assertEqual([b['name'] for b in cfg['_universe']], ['New Race'])
+
+
+class MultiJobTests(unittest.TestCase):
+    def test_repeats_only_while_live_trades_complete(self):
+        from hosted_runner import run_cycles
+        class R:
+            live = True
+            def __init__(self, outs): self.outs, self.calls = list(outs), 0
+            def cycle(self):
+                self.calls += 1
+                return self.outs.pop(0)
+        cfg = arb_config(max_jobs_per_run=3)
+        r = R([[{'completed': 'a'}], [{'completed': 'b'}], [{'completed': 'c'}], [{'completed': 'd'}]])
+        self.assertEqual(len(run_cycles(r, cfg, {})), 3)
+        r = R([[{'completed': 'a'}], [{'decision': 'NO_TRADE'}], [{'completed': 'c'}]])
+        run_cycles(r, cfg, {}); self.assertEqual(r.calls, 2)
+        r = R([[{'dry_run': True}], [{'dry_run': True}]]); r.live = False
+        run_cycles(r, cfg, {}); self.assertEqual(r.calls, 1)
