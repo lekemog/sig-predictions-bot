@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
+import arb_engine
 from decision_engine import evaluate, executable, timestamp
 from turnover import dip_entry_reason, profit_exit_target
 
@@ -319,6 +320,9 @@ class Journal:
     def pending(self):
         return [json.loads(row[0]) for row in self.db.execute("SELECT body FROM jobs WHERE status NOT IN ('done','dry_run')")]
 
+    def jobs(self):
+        return [json.loads(row[0]) for row in self.db.execute('SELECT body FROM jobs')]
+
     def event(self, kind, body):
         with self.db:
             self.db.execute('INSERT INTO events VALUES (?,?,?)', (now().isoformat(), kind, json.dumps(body, allow_nan=False)))
@@ -413,14 +417,54 @@ def price_for(book, side, action, quantity):
     return tick(worst), execution
 
 
-def cost_allowance(config):
+def verified_fee(config):
     c = config['costs']
     if c.get('verified') is not True or not c.get('source'):
         raise Halt('Document fee schedule in config before enabling live placements')
     fee = float(c['fee_per_share'])
     if not math.isfinite(fee) or fee < 0:
         raise Halt('Invalid fee allowance')
-    return fee + .005  # one extra tick per leg for implementation sensitivity
+    return fee
+
+
+def cost_allowance(config):
+    return verified_fee(config) + .005  # one extra tick per leg for implementation sensitivity
+
+
+def arb_policy(config):
+    """Validated probability-aware arb settings, or None for legacy behaviour."""
+    p = config.get('arb')
+    if p is None or (isinstance(p, dict) and p.get('enabled') is False):
+        return None
+    if not isinstance(p, dict) or p.get('enabled') is not True:
+        raise Halt('Invalid arb policy')
+    out = {'min_edge_per_share': p.get('min_edge_per_share', .005),
+           'min_profit': p.get('min_profit', 1),
+           'p_double_yes': p.get('p_double_yes', .002),
+           'leg_buffer': p.get('leg_buffer', 'empirical'),
+           'redeploy_haircut': p.get('redeploy_haircut', .5),
+           'universe_races_per_sweep': p.get('universe_races_per_sweep', 0)}
+    bounds = {'min_edge_per_share': (0, .05), 'min_profit': (0, 100), 'p_double_yes': (0, .05),
+              'redeploy_haircut': (0, 1), 'universe_races_per_sweep': (0, 200)}
+    for k, (lo, hi) in bounds.items():
+        v = out[k]
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or not lo <= v <= hi:
+            raise Halt('Invalid arb policy value: ' + k)
+    b = out['leg_buffer']
+    if b != 'empirical' and (isinstance(b, bool) or not isinstance(b, (int, float))
+                             or not math.isfinite(b) or not 0 <= b <= .02):
+        raise Halt('Invalid arb leg buffer')
+    return out
+
+
+def arb_charges(config, policy, n):
+    """(per-share charge, fixed per-job charge, leg-risk detail) for an n-leg job."""
+    fee = verified_fee(config)
+    if policy['leg_buffer'] == 'empirical':
+        risk = arb_engine.leg_risk(config.get('_execution_stats', {}),
+                                   min(10., float(config.get('repair_loss_budget', 10))))
+        return n * fee, risk['expected_loss_per_job'], risk
+    return n * (fee + policy['leg_buffer']), 0., {'flat_per_leg': policy['leg_buffer']}
 
 
 def defensive_entry_reason(state, config, basket, contracts):
@@ -464,7 +508,103 @@ def defensive_price_reason(config, quantity, spend, floor, liquidation):
     return None
 
 
+def arb_basket_plan(api, state, config, basket, policy, entry_observer=None):
+    """Depth-optimal, probability-aware version of basket_plan.
+
+    Entry: maximise q * (E[payout] - sum(worst NO ask) - fees) - E[execution loss]
+    over every depth breakpoint, with E[payout] = (n-1) - P(double YES).
+    Exit: sell only if worst-level proceeds beat the settlement floor discounted
+    at the best capital-blocked arb ROI (zero when capital is not binding).
+    """
+    observe = entry_observer or (lambda reason: None)
+    risk = risk_limits(config)
+    contracts = validate_contracts(api, basket)
+    committed, costs, directional = portfolio_risk(state, config)
+    positions = signed_positions(state)
+    ids = [str(l['exchange_id']) for l in basket['legs']]
+    held = -positions.get(ids[0], 0)
+    books = fresh_books(api, basket['legs'])
+    n = len(ids)
+    per_share, fixed, leg_risk = arb_charges(config, policy, n)
+    settlement_tier = arb_engine.tier(basket)
+    fair = arb_engine.fair_value(books)
+    if held > 0:
+        rows = [p for p in state['positions'] if str(p['exchangeId']) in ids]
+        redeploy = float(config.get('_redeploy_roi', 0) or 0)
+        hold_value = arb_engine.hold_threshold(n - 1, redeploy, policy['redeploy_haircut'])
+        cap = min(int(held), risk['clip'])
+        exit_ = arb_engine.optimal_exit([arb_engine.ladder(books[i], 'no', 'sell') for i in ids],
+                                        hold_value, per_share, cap)
+        if exit_ is not None and exit_['surplus'] < fixed:
+            exit_ = None
+        observe({'event': 'held_basket_diagnostic', 'basket': basket['name'],
+                 'account_at': state['at'], 'matched_shares': held,
+                 'cost_basis': sum(float(p['costBasis']) for p in rows),
+                 'marked_value': sum(float(p.get('marketValue', 0)) for p in rows),
+                 'conditional_floor': held * (n - 1), 'hold_value_per_share': hold_value,
+                 'redeploy_roi': redeploy, 'best_exit': exit_, 'fair_value': fair,
+                 'floor_is_conditional_not_realized_profit': True})
+        if exit_ is not None:
+            q = exit_['quantity']
+            return {'kind': 'basket_exit', 'name': basket['name'], 'action': 'sell',
+                    'quantity': q, 'legs': basket['legs'],
+                    'prices': [tick(x) for x in exit_['limits']],
+                    'value_floor': q * hold_value, 'normal_settlement_floor': q * (n - 1),
+                    'net_limit_proceeds': exit_['net_proceeds'], 'contracts': contracts,
+                    'robust_profit': exit_['surplus'],
+                    'exit_method': 'opportunity_cost' if redeploy > 0 else 'settlement_floor',
+                    'redeploy_roi': redeploy}
+    if config.get('entries_paused', False) is not False:
+        observe('New entries paused for drawdown review')
+        return None
+    needs_proof = entry_proof_required(basket) or settlement_tier != 'standard'
+    reason = (defensive_entry_reason(state, config, basket, contracts)
+              or (entry_proof_reason(dict(basket, entry_proof_required=True), contracts)
+                  if needs_proof else None))
+    if reason is not None:
+        observe(reason)
+        return None
+    payout = arb_engine.expected_payout(n, policy['p_double_yes'])
+    ladders = [arb_engine.ladder(books[i], 'no', 'buy') for i in ids]
+    max_q = min(qty(basket.get('clip', 100)), risk['clip'])
+
+    def size(limit_q):
+        return arb_engine.optimal_entry(ladders, payout, per_share, fixed, limit_q,
+                                        policy['min_edge_per_share'], policy['min_profit'])
+    best = size(max_q)
+    if best is None:
+        tops = [l[0][0] if l else None for l in ladders]
+        observe({'event': 'arb_no_edge', 'basket': basket['name'], 'best_no_asks': tops,
+                 'expected_payout': payout, 'fair_value': fair})
+        return None
+    capacity = min(risk['committed'] - committed, risk['basket'] - costs.get(basket['name'], 0),
+                   state['cash'] - risk['reserve'])
+    unconstrained = best
+    while best is not None and best['robust_spend'] > capacity + 1e-9:
+        smaller = int(capacity // (best['robust_spend'] / best['quantity']))
+        best = size(smaller) if 1 <= smaller < best['quantity'] else None
+    if best is None:
+        observe({'event': 'capital_blocked', 'basket': basket['name'],
+                 'roi': unconstrained['roi'], 'quantity': unconstrained['quantity'],
+                 'robust_profit': unconstrained['robust_profit'], 'capacity': capacity})
+        return None
+    q = best['quantity']
+    return {'kind': 'basket_entry', 'name': basket['name'], 'action': 'buy', 'quantity': q,
+            'legs': basket['legs'], 'prices': [tick(x) for x in best['limits']],
+            'max_spend': best['robust_spend'], 'value_floor': q * (n - 1),
+            'robust_profit': best['robust_profit'], 'expected_profit': best['expected_profit'],
+            'roi': best['roi'], 'settlement_tier': settlement_tier,
+            'p_double_yes': policy['p_double_yes'], 'leg_risk': leg_risk, 'fair_value': fair,
+            'contracts': contracts,
+            'objective': 'normal-settlement value; no fast-exit guarantee',
+            'mechanism': 'Distinct party-winner claims in separate books; third-party win increases NO payout',
+            'falsification': 'Changed settlement/party definitions, incomplete fills, cancellation or N/A'}
+
+
 def basket_plan(api, state, config, basket, entry_observer=None):
+    policy = arb_policy(config)
+    if policy is not None:
+        return arb_basket_plan(api, state, config, basket, policy, entry_observer)
     risk = risk_limits(config)
     allowance = cost_allowance(config)
     contracts = validate_contracts(api, basket)
@@ -898,6 +1038,51 @@ class Runner:
             raise Halt('Hedge still unmatched')
         return after
 
+    def observer(self, basket, blocked):
+        def record(reason):
+            if isinstance(reason, dict) and reason.get('event') == 'capital_blocked' and reason.get('roi'):
+                blocked.append(reason)
+            self.journal.event('entry_blocked', {'basket': basket['name'], 'reason': reason})
+        return record
+
+    def universe(self, state, blocked):
+        """Book-only prescreen of unheld auto-discovered D/R races, then full plan."""
+        policy = arb_policy(self.config)
+        plans = []
+        for candidate in self.config.get('_universe', []):
+            basket = dict(candidate, _prescreened=True)
+            ids = [str(l['exchange_id']) for l in basket['legs']]
+            if {str(l['exchange_id']) for b in self.config['baskets'] for l in b['legs']} & set(ids):
+                continue
+            try:
+                books = fresh_books(self.api, basket['legs'])
+                per_share, fixed, _ = arb_charges(self.config, policy, len(ids))
+                tops = [arb_engine.ladder(books[i], 'no', 'buy') for i in ids]
+                if any(not t for t in tops):
+                    continue
+                edge = arb_engine.expected_payout(len(ids), policy['p_double_yes']) - sum(t[0][0] for t in tops) - per_share
+                self.journal.event('universe_prescreen', {'basket': basket['name'], 'edge_per_share': edge})
+                if edge < policy['min_edge_per_share'] - 1e-9:
+                    continue
+                self.config['baskets'].append(basket)
+                plan = basket_plan(self.api, state, self.config, basket,
+                                   entry_observer=self.observer(basket, blocked))
+                self.journal.event('screened', {'basket': basket['name'], 'candidate': bool(plan)})
+                if plan:
+                    plans.append(plan)
+                else:
+                    self.config['baskets'].remove(basket)
+            except Halt as e:
+                if basket in self.config['baskets']:
+                    self.config['baskets'].remove(basket)
+                self.journal.event('abstain', {'basket': basket['name'], 'reason': str(e)})
+        return plans
+
+    def drop_unused_auto(self, keep):
+        """Auto baskets join the managed set only once selected for execution."""
+        self.config['baskets'] = [b for b in self.config['baskets']
+                                  if not b.get('_prescreened') or b['name'] == keep]
+
     def cycle(self, cases=None):
         self.check_stop()
         pending = self.journal.pending()
@@ -910,6 +1095,11 @@ class Runner:
         if state['orders']:
             raise Halt('Existing resting orders found; no conflicting new placements')
         portfolio_risk(state, self.config)
+        policy = arb_policy(self.config)
+        blocked = []
+        if policy is not None:
+            self.config['_execution_stats'] = arb_engine.execution_stats(self.journal.jobs())
+            self.config['_redeploy_roi'] = 0
         plans = []
         review_names = set(self.config.get('review_names', [b['name'] for b in self.config['baskets']]))
         for basket in self.config['baskets']:
@@ -918,8 +1108,7 @@ class Runner:
             self.journal.event('checking', {'basket': basket['name']})
             try:
                 plan = basket_plan(self.api, state, self.config, basket,
-                                   entry_observer=lambda reason: self.journal.event(
-                                       'entry_blocked', {'basket': basket['name'], 'reason': reason}))
+                                   entry_observer=self.observer(basket, blocked))
                 if plan:
                     plans.append(plan)
                 self.journal.event('screened', {'basket': basket['name'], 'candidate': bool(plan)})
@@ -927,6 +1116,20 @@ class Runner:
                 self.journal.event('abstain', {'basket': basket['name'], 'reason': str(e)})
                 if any(signed_positions(state).get(str(l['exchange_id']), 0) for l in basket['legs']):
                     raise Halt('Held basket could not be verified: ' + basket['name']) from None
+        if policy is not None:
+            plans.extend(self.universe(state, blocked))
+            if not plans and blocked:
+                # Capital-bound: a held arb is worth releasing only if redeploying
+                # its proceeds into the best blocked arb beats holding to settlement.
+                self.config['_redeploy_roi'] = max(b['roi'] for b in blocked)
+                for basket in self.config['baskets']:
+                    if any(signed_positions(state).get(str(l['exchange_id']), 0) for l in basket['legs']):
+                        try:
+                            plan = basket_plan(self.api, state, self.config, basket)
+                        except Halt:
+                            continue
+                        if plan and plan['kind'] == 'basket_exit':
+                            plans.append(plan)
         for case in (cases or [])[:3]:
             plan = directional_plan(self.api, state, self.config, case)
             if plan:
@@ -934,7 +1137,9 @@ class Runner:
         # One job per cycle; always obtain a fresh state and prices on the next cycle.
         plans.sort(key=lambda p: (p['kind'] == 'basket_exit', p.get('robust_profit', p.get('conservative_limit_edge', 0))), reverse=True)
         if not plans:
+            self.drop_unused_auto(None)
             return [{'decision': 'NO_TRADE', 'cash': state['cash']}]
+        self.drop_unused_auto(plans[0]['name'])
         # Long scans must not use stale limits/state to submit. Rebuild selected plan.
         state = self.api.state()
         selected = plans[0]

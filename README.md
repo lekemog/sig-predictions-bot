@@ -28,6 +28,18 @@ Equal NO holdings in n mutually exclusive party-winner contracts for the same ra
 
 The hosted runner checks all configured baskets, including all 11 current holdings and the newly researched Kansas Senate pair, ranks eligible exits before additions and submits at most one new job per sweep. Whole-basket or matched partial exits require net proceeds at least equal to their normal-settlement floor. Entries require executable depth and positive profit after documented trading costs plus an extra 0.005 per share per leg. The starting clip is up to 1,000 matched shares, reduced when liquidity or risk limits bind.
 
+### Arb engine v2 (`arb_engine.py`, enabled by the `arb` config block)
+
+With `arb.enabled` the planner replaces the halving search and flat buffers with an expected-value calculation:
+
+- **Expected payout per matched NO share** = (n−1) + P(unlisted winner) − P(one winner resolves two legs YES). The unlisted-winner upside is ignored (floor stays conservative); `p_double_yes` (default 0.002) charges the only loss path. Baskets that are not a clean Democratic/Republican pair, or are on the unproven list, still need the reviewed settlement proof.
+- **Execution risk from our own fills**: P(partial fill) = (partials + 1) / (jobs + 2) from the journal (Beta(1,1) prior), times twice the repair budget, charged once per job. With 0 partials in 25 jobs this is ~0.74 SUSQies per job instead of 0.005 per share per leg (10 per 1,000-share pair).
+- **Depth-optimal sizing**: profit is linear between order-book level boundaries, so every boundary is evaluated and the best robust (worst-level limit) profit wins, then shrunk to fit cash/committed/basket capacity.
+- **Universe scan**: every clean D/R race in the discovered catalog is book-prescreened in rotating chunks (`universe_races_per_sweep`), fully validated only when it shows an edge, and remembered once selected so held legs stay managed (also recovered from checkpointed jobs after a crash).
+- **Exits by opportunity cost**: a held basket is sold only if proceeds ≥ (n−1) / (1 + haircut × best capital-blocked arb ROI). With free capital that is the settlement floor, so arbs are never sold below what they pay. The legacy cost-basis profit-take (`turnover`) is bypassed in arb mode because it sells below the floor even when capital is idle.
+
+`python arb_engine.py` summarizes recorded basket quotes and fill history from `.bot/state.json`. Removing the `arb` block restores the legacy planner exactly.
+
 The fee allowance is zero based on SIG's no-participant-trading-fee documentation and the reconciled historical ledger. Every new fill/cash reconciliation independently checks that assumption.
 
 The standalone engine also supports probability sensitivity and researched directional cases. Those need timestamped sources, auditable probability ranges and at least 0.05 conservative expected profit per share after costs. The hosted workflow currently executes contract-consistency baskets; it does not autonomously collect polling, calibrate forecasts or run the paper turnover experiment.

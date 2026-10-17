@@ -1,5 +1,5 @@
 {
-  "entries_paused": true,
+  "entries_paused": false,
   "risk_limits": {
     "committed": 100000,
     "reserve": 25000,
@@ -223,14 +223,6 @@
       ]
     }
   ],
-  "defensive_entries": {
-    "enabled": true,
-    "account_value_floor": 99750,
-    "max_entry_clip": 250,
-    "max_new_basket_cost": 1000,
-    "min_settlement_roi": 0.03,
-    "max_round_trip_loss_fraction": 0.01
-  },
   "dip_monitor": {
     "enabled": true,
     "mode": "observe",
@@ -247,5 +239,14 @@
     "mode": "observe",
     "profit_fraction": 0.005,
     "min_profit": 1
+  },
+  "arb": {
+    "enabled": true,
+    "min_edge_per_share": 0.002,
+    "min_profit": 1,
+    "p_double_yes": 0.002,
+    "leg_buffer": "empirical",
+    "redeploy_haircut": 0.5,
+    "universe_races_per_sweep": 40
   }
 }
