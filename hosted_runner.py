@@ -146,7 +146,7 @@ def remember_auto_baskets(config, data):
     data['auto_baskets'] = list(known.values())
 
 
-def run_cycles(runner, config, data):
+def run_cycles(runner, config, remote):
     """Repeat full fresh cycles while each one completes a live trade.
 
     GitHub drops most scheduled runs, so one trade per run starves the arb.
@@ -160,7 +160,9 @@ def run_cycles(runner, config, data):
         result = runner.cycle()
         results.extend(result)
         if runner.live:
-            remember_auto_baskets(config, data)
+            # Every journal save rewrites remote.data with a new dict, so always
+            # write into the CURRENT object, never one captured before a trade.
+            remember_auto_baskets(config, remote.data)
         if not (runner.live and result and isinstance(result[0], dict) and 'completed' in result[0]):
             break
     return results
@@ -225,7 +227,7 @@ def main():
                     'at': now().isoformat(), 'status': 'failed',
                     'reason': str(error), 'execution_enabled': False, 'orders_submitted': 0}
                 journal.event('dip_scan_failed', remote.data['latest_dip_scan'])
-        result = run_cycles(runner, config, remote.data)
+        result = run_cycles(runner, config, remote)
         remote.data['latest_arb_scan'] = arb_summary(journal, start_rowid)
         status, screened_count = cycle_screening(journal, start_rowid, config['baskets'])
         record_sweep(remote, 'live' if runner.live else 'dry-run', status, screened_count)

@@ -222,10 +222,31 @@ class MultiJobTests(unittest.TestCase):
             def cycle(self):
                 self.calls += 1
                 return self.outs.pop(0)
+        class Remote:
+            data = {}
         cfg = arb_config(max_jobs_per_run=3)
         r = R([[{'completed': 'a'}], [{'completed': 'b'}], [{'completed': 'c'}], [{'completed': 'd'}]])
-        self.assertEqual(len(run_cycles(r, cfg, {})), 3)
+        self.assertEqual(len(run_cycles(r, cfg, Remote())), 3)
         r = R([[{'completed': 'a'}], [{'decision': 'NO_TRADE'}], [{'completed': 'c'}]])
-        run_cycles(r, cfg, {}); self.assertEqual(r.calls, 2)
+        run_cycles(r, cfg, Remote()); self.assertEqual(r.calls, 2)
         r = R([[{'dry_run': True}], [{'dry_run': True}]]); r.live = False
-        run_cycles(r, cfg, {}); self.assertEqual(r.calls, 1)
+        run_cycles(r, cfg, Remote()); self.assertEqual(r.calls, 1)
+
+
+class PersistTests(unittest.TestCase):
+    def test_auto_baskets_survive_checkpoint_rewrites(self):
+        from hosted_runner import run_cycles
+        class Remote:
+            data = {'jobs': []}
+        remote = Remote()
+        cfg = arb_config(max_jobs_per_run=1)
+        cfg['baskets'].append({'name': 'Auto Race', 'clip': 1000, 'auto': True, '_prescreened': True,
+                               'legs': [{'market_id': '3', 'exchange_id': '33', 'party': 'Democratic Party'}]})
+        class R:
+            live = True
+            def cycle(self):
+                remote.data = dict(remote.data, jobs=['saved'])  # what DurableJournal.save does
+                return [{'completed': 'x'}]
+        run_cycles(R(), cfg, remote)
+        self.assertEqual([b['name'] for b in remote.data['auto_baskets']], ['Auto Race'])
+        self.assertNotIn('_prescreened', remote.data['auto_baskets'][0])
