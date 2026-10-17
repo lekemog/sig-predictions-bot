@@ -6,7 +6,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from trading_bot import API, END, Halt, Journal, Runner, now
+import arb_engine
+from trading_bot import API, END, Halt, Journal, Runner, arb_policy, now
 from research_runner import ReadOnlyAPI, collect
 from market_brain import BrainStore
 from dip_monitor import scan as scan_dips
@@ -110,6 +111,58 @@ def cycle_screening(journal, start_rowid, baskets):
     return ('success' if complete else 'incomplete'), len(screened)
 
 
+AUTO_KEYS = ('name', 'clip', 'auto', 'legs')
+
+
+def prepare_universe(config, data):
+    """Managed auto baskets always join config; unheld D/R races rotate per sweep."""
+    policy = arb_policy(config)
+    if policy is None:
+        return
+    taken = {str(l['exchange_id']) for b in config['baskets'] for l in b['legs']}
+    # Jobs are checkpointed BEFORE any order is sent, so they also recover auto
+    # baskets after a crash between submission and remember_auto_baskets.
+    from_jobs = [{'name': j['plan']['name'], 'clip': 1000, 'auto': True, 'legs': j['plan']['legs']}
+                 for j in data.get('jobs', [])
+                 if str((j.get('plan') or {}).get('kind', '')).startswith('basket')
+                 and j.get('status') != 'dry_run' and j['plan'].get('legs')]
+    for b in data.get('auto_baskets', []) + from_jobs:
+        ids = {str(l['exchange_id']) for l in b['legs']}
+        if not ids & taken:
+            config['baskets'].append({k: b[k] for k in AUTO_KEYS if k in b})
+            taken |= ids
+    catalog = (data.get('last_universe_scan') or {}).get('catalog') or {}
+    universe = arb_engine.discover(catalog, config['baskets'])
+    slot = int(now().timestamp() // 600)
+    config['_universe'] = arb_engine.rotation(universe, int(policy['universe_races_per_sweep']), slot)
+
+
+def remember_auto_baskets(config, data):
+    """Never forget an auto basket once selected: held legs must stay managed."""
+    known = {b['name']: b for b in data.get('auto_baskets', [])}
+    for b in config['baskets']:
+        if b.get('auto'):
+            known.setdefault(b['name'], {k: b[k] for k in AUTO_KEYS if k in b})
+    data['auto_baskets'] = list(known.values())
+
+
+def arb_summary(journal, start_rowid):
+    rows = journal.db.execute(
+        "SELECT kind, body FROM events WHERE rowid > ? AND kind IN ('universe_prescreen', 'entry_blocked')",
+        (start_rowid,))
+    edges, blocked = [], []
+    for kind, body in rows:
+        body = json.loads(body)
+        if kind == 'universe_prescreen':
+            edges.append(body)
+        elif isinstance(body.get('reason'), dict) and body['reason'].get('event') in ('capital_blocked', 'arb_no_edge'):
+            blocked.append(body['reason'])
+    edges.sort(key=lambda e: e['edge_per_share'], reverse=True)
+    return {'at': now().isoformat(), 'universe_top_edges': edges[:10],
+            'capital_blocked': [b for b in blocked if b['event'] == 'capital_blocked'][:10],
+            'universe_screened': len(edges)}
+
+
 def main():
     if now() >= END:
         print('Trading cutoff reached; no API orders or further reviews.')
@@ -127,6 +180,7 @@ def main():
                   'Every new execution must independently reconcile fills and cash.'}
     # Check every existing basket, but limit additions to one fresh clip per run.
     config.pop('review_names', None)
+    prepare_universe(config, remote.data)
     journal = DurableJournal('private/hosted.sqlite', remote)
     runner = HostedRunner(API(os.environ.get('SIG_API_KEY')), journal, config,
                     live=os.environ.get('SIG_MODE', 'dry-run') == 'live')
@@ -152,6 +206,9 @@ def main():
                     'reason': str(error), 'execution_enabled': False, 'orders_submitted': 0}
                 journal.event('dip_scan_failed', remote.data['latest_dip_scan'])
         result = runner.cycle()
+        if runner.live:
+            remember_auto_baskets(config, remote.data)
+        remote.data['latest_arb_scan'] = arb_summary(journal, start_rowid)
         status, screened_count = cycle_screening(journal, start_rowid, config['baskets'])
         record_sweep(remote, 'live' if runner.live else 'dry-run', status, screened_count)
         # Keep account and diagnostics independently of bounded event history.
