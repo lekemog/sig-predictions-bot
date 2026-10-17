@@ -1,0 +1,2039 @@
+{
+ "1000": {
+  "kalshi": "GOVPARTYTN-26-R",
+  "market_id": "311",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Marsha Blackburn (R)",
+   "slug": "tennessee-governor-winner-2026"
+  },
+  "race": "Tennessee Governor"
+ },
+ "1001": {
+  "kalshi": null,
+  "market_id": "312",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Amanda Janoo (D)",
+   "slug": "vermont-governor-winner-2026"
+  },
+  "race": "Vermont Governor"
+ },
+ "1002": {
+  "kalshi": null,
+  "market_id": "313",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Phil Scott (R)",
+   "slug": "vermont-governor-winner-2026"
+  },
+  "race": "Vermont Governor"
+ },
+ "1003": {
+  "kalshi": "GOVPARTYWI-26-D",
+  "market_id": "314",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "David Crowley (D)",
+   "slug": "wisconsin-governor-winner-2026"
+  },
+  "race": "Wisconsin Governor"
+ },
+ "1004": {
+  "kalshi": "GOVPARTYWI-26-R",
+  "market_id": "315",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Tom Tiffany (R)",
+   "slug": "wisconsin-governor-winner-2026"
+  },
+  "race": "Wisconsin Governor"
+ },
+ "1005": {
+  "kalshi": "GOVPARTYWY-26-D",
+  "market_id": "316",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Kenneth Casner (D)",
+   "slug": "wyoming-governor-winner-2026"
+  },
+  "race": "Wyoming Governor"
+ },
+ "1006": {
+  "kalshi": "GOVPARTYWY-26-R",
+  "market_id": "317",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Eric Barlow (R)",
+   "slug": "wyoming-governor-winner-2026"
+  },
+  "race": "Wyoming Governor"
+ },
+ "1007": {
+  "kalshi": null,
+  "market_id": "318",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "AL-02 House race"
+ },
+ "1008": {
+  "kalshi": null,
+  "market_id": "319",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "AL-02 House race"
+ },
+ "1009": {
+  "kalshi": null,
+  "market_id": "320",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "FL-07 House race"
+ },
+ "1010": {
+  "kalshi": null,
+  "market_id": "321",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "FL-07 House race"
+ },
+ "1011": {
+  "kalshi": null,
+  "market_id": "322",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "FL-09 House race"
+ },
+ "1012": {
+  "kalshi": "HOUSEFL13-26-D",
+  "market_id": "323",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Leela Gray (D)",
+   "slug": "fl-13-house-election-winner"
+  },
+  "race": "FL-13 House race"
+ },
+ "1013": {
+  "kalshi": null,
+  "market_id": "324",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "FL-16 House race"
+ },
+ "1014": {
+  "kalshi": null,
+  "market_id": "325",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "FL-16 House race"
+ },
+ "1015": {
+  "kalshi": null,
+  "market_id": "326",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "FL-20 House race"
+ },
+ "1016": {
+  "kalshi": null,
+  "market_id": "327",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "FL-20 House race"
+ },
+ "1017": {
+  "kalshi": null,
+  "market_id": "328",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "FL-22 House race"
+ },
+ "1018": {
+  "kalshi": null,
+  "market_id": "329",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "FL-22 House race"
+ },
+ "1019": {
+  "kalshi": "HOUSEMI7-26-D",
+  "market_id": "330",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "William Lawrence (D)",
+   "slug": "mi-07-house-election-winner"
+  },
+  "race": "MI-07 House race"
+ },
+ "1020": {
+  "kalshi": "HOUSEMI7-26-R",
+  "market_id": "331",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Tom Barrett (R)",
+   "slug": "mi-07-house-election-winner"
+  },
+  "race": "MI-07 House race"
+ },
+ "1021": {
+  "kalshi": "HOUSEMI10-26-D",
+  "market_id": "332",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Christina Hines (D)",
+   "slug": "mi-10-house-election-winner"
+  },
+  "race": "MI-10 House race"
+ },
+ "1022": {
+  "kalshi": "HOUSEMI10-26-R",
+  "market_id": "333",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Mike Bouchard (R)",
+   "slug": "mi-10-house-election-winner"
+  },
+  "race": "MI-10 House race"
+ },
+ "1023": {
+  "kalshi": null,
+  "market_id": "334",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "MN-01 House race"
+ },
+ "1024": {
+  "kalshi": null,
+  "market_id": "335",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "MN-01 House race"
+ },
+ "1025": {
+  "kalshi": "HOUSEMN2-26-D",
+  "market_id": "336",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Matt Little (D)",
+   "slug": "mn-02-house-election-winner"
+  },
+  "race": "MN-02 House race"
+ },
+ "1026": {
+  "kalshi": "HOUSEMN2-26-R",
+  "market_id": "337",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Eric Pratt (R)",
+   "slug": "mn-02-house-election-winner"
+  },
+  "race": "MN-02 House race"
+ },
+ "1027": {
+  "kalshi": null,
+  "market_id": "338",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "MN-05 House race"
+ },
+ "1028": {
+  "kalshi": null,
+  "market_id": "339",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "MN-05 House race"
+ },
+ "1029": {
+  "kalshi": null,
+  "market_id": "340",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "TN-05 House race"
+ },
+ "1030": {
+  "kalshi": null,
+  "market_id": "341",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "TN-05 House race"
+ },
+ "1031": {
+  "kalshi": "HOUSEVA1-26-D",
+  "market_id": "342",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "VA-01 House race"
+ },
+ "1032": {
+  "kalshi": "HOUSEVA2-26-D",
+  "market_id": "343",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "VA-02 House race"
+ },
+ "1033": {
+  "kalshi": null,
+  "market_id": "344",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "VA-05 House race"
+ },
+ "1034": {
+  "kalshi": null,
+  "market_id": "345",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "VA-05 House race"
+ },
+ "1035": {
+  "kalshi": "HOUSEVA7-26-R",
+  "market_id": "346",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "VA-07 House race"
+ },
+ "1036": {
+  "kalshi": "HOUSEWA3-26-D",
+  "market_id": "347",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "WA-03 House race"
+ },
+ "1037": {
+  "kalshi": "HOUSEWA3-26-R",
+  "market_id": "348",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "WA-03 House race"
+ },
+ "1038": {
+  "kalshi": "HOUSEWI1-26-D",
+  "market_id": "349",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "WI-01 House race"
+ },
+ "1039": {
+  "kalshi": "HOUSEWI1-26-R",
+  "market_id": "350",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "WI-01 House race"
+ },
+ "1040": {
+  "kalshi": "HOUSEWI3-26-D",
+  "market_id": "351",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "WI-03 House race"
+ },
+ "1041": {
+  "kalshi": "HOUSEWI3-26-R",
+  "market_id": "352",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "WI-03 House race"
+ },
+ "1042": {
+  "kalshi": "SENATEDE-26-D",
+  "market_id": "353",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Democrat",
+   "slug": "delaware-senate-election-winner"
+  },
+  "race": "Delaware Senate"
+ },
+ "1043": {
+  "kalshi": "SENATEFL-28-D",
+  "market_id": "354",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Angie Nixon (D)",
+   "slug": "florida-senate-election-winner"
+  },
+  "race": "Florida Senate"
+ },
+ "1044": {
+  "kalshi": "SENATEFL-28-R",
+  "market_id": "355",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Ashley Moody (R)",
+   "slug": "florida-senate-election-winner"
+  },
+  "race": "Florida Senate"
+ },
+ "1045": {
+  "kalshi": null,
+  "market_id": "356",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Adam Hamilton (D)",
+   "slug": "kansas-senate-election-winner"
+  },
+  "race": "Kansas Senate"
+ },
+ "1046": {
+  "kalshi": null,
+  "market_id": "357",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Roger Marshall (R)",
+   "slug": "kansas-senate-election-winner"
+  },
+  "race": "Kansas Senate"
+ },
+ "1047": {
+  "kalshi": "SENATEMI-26-D",
+  "market_id": "358",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Abdul El-Sayed (D)",
+   "slug": "michigan-senate-election-winner"
+  },
+  "race": "Michigan Senate"
+ },
+ "1048": {
+  "kalshi": "SENATEMI-26-R",
+  "market_id": "359",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Mike Rogers (R)",
+   "slug": "michigan-senate-election-winner"
+  },
+  "race": "Michigan Senate"
+ },
+ "1049": {
+  "kalshi": "SENATEMN-26-D",
+  "market_id": "360",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Peggy Flanagan (D)",
+   "slug": "minnesota-senate-election-winner"
+  },
+  "race": "Minnesota Senate"
+ },
+ "1050": {
+  "kalshi": "SENATEMN-26-R",
+  "market_id": "361",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Michele Tafoya (R)",
+   "slug": "minnesota-senate-election-winner"
+  },
+  "race": "Minnesota Senate"
+ },
+ "1051": {
+  "kalshi": "SENATETN-26-D",
+  "market_id": "362",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Marquita Bradshaw (D)",
+   "slug": "tennessee-senate-election-winner"
+  },
+  "race": "Tennessee Senate"
+ },
+ "1052": {
+  "kalshi": "SENATETN-26-R",
+  "market_id": "363",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Bill Hagerty (R)",
+   "slug": "tennessee-senate-election-winner"
+  },
+  "race": "Tennessee Senate"
+ },
+ "1053": {
+  "kalshi": "SENATEVA-26-R",
+  "market_id": "364",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Bert Mizusawa (R)",
+   "slug": "virginia-senate-election-winner"
+  },
+  "race": "Virginia Senate"
+ },
+ "1054": {
+  "kalshi": "SENATEWY-26-D",
+  "market_id": "365",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "James W. Byrd (D)",
+   "slug": "wyoming-senate-election-winner"
+  },
+  "race": "Wyoming Senate"
+ },
+ "1055": {
+  "kalshi": "SENATEWY-26-R",
+  "market_id": "366",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "Wyoming Senate"
+ },
+ "1057": {
+  "kalshi": "KXGOVPARTYAK-26-D",
+  "market_id": "368",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "Alaska Governor"
+ },
+ "1058": {
+  "kalshi": "KXGOVPARTYAK-26-R",
+  "market_id": "369",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "Alaska Governor"
+ },
+ "1059": {
+  "kalshi": "GOVPARTYMA-26-D",
+  "market_id": "370",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Maura Healey (D)",
+   "slug": "massachusetts-governor-winner-2026"
+  },
+  "race": "Massachusetts Governor"
+ },
+ "1060": {
+  "kalshi": "GOVPARTYMA-26-R",
+  "market_id": "371",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Michael Minogue (R)",
+   "slug": "massachusetts-governor-winner-2026"
+  },
+  "race": "Massachusetts Governor"
+ },
+ "1061": {
+  "kalshi": "GOVPARTYNH-28-D",
+  "market_id": "372",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Cinde Warmington (D)",
+   "slug": "new-hampshire-governor-winner-2026"
+  },
+  "race": "New Hampshire Governor"
+ },
+ "1062": {
+  "kalshi": "GOVPARTYNH-28-R",
+  "market_id": "373",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Kelly Ayotte (R)",
+   "slug": "new-hampshire-governor-winner-2026"
+  },
+  "race": "New Hampshire Governor"
+ },
+ "1063": {
+  "kalshi": "GOVPARTYOK-26-R",
+  "market_id": "374",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Mike Mazzei (R)",
+   "slug": "oklahoma-governor-winner-2026"
+  },
+  "race": "Oklahoma Governor"
+ },
+ "1064": {
+  "kalshi": "HOUSENH1-26-D",
+  "market_id": "375",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "NH-01 House race"
+ },
+ "1065": {
+  "kalshi": "HOUSENH1-26-R",
+  "market_id": "376",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "NH-01 House race"
+ },
+ "1066": {
+  "kalshi": null,
+  "market_id": "377",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "Alaska Senate"
+ },
+ "1067": {
+  "kalshi": null,
+  "market_id": "378",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "Alaska Senate"
+ },
+ "1068": {
+  "kalshi": "SENATEMA-26-D",
+  "market_id": "379",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Ed Markey (D)",
+   "slug": "massachusetts-senate-election-winner"
+  },
+  "race": "Massachusetts Senate"
+ },
+ "1069": {
+  "kalshi": "SENATEMA-26-R",
+  "market_id": "380",
+  "party": "Republican Party",
+  "poly": {
+   "group": "John Deaton (R)",
+   "slug": "massachusetts-senate-election-winner"
+  },
+  "race": "Massachusetts Senate"
+ },
+ "1070": {
+  "kalshi": null,
+  "market_id": "381",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Chris Pappas (D)",
+   "slug": "new-hampshire-senate-election-winner"
+  },
+  "race": "New Hampshire Senate"
+ },
+ "1071": {
+  "kalshi": null,
+  "market_id": "382",
+  "party": "Republican Party",
+  "poly": {
+   "group": "John E. Sununu (R)",
+   "slug": "new-hampshire-senate-election-winner"
+  },
+  "race": "New Hampshire Senate"
+ },
+ "1072": {
+  "kalshi": null,
+  "market_id": "383",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "N\u2019Kiyla \u201cJasmine\u201d Thomas (D)",
+   "slug": "oklahoma-senate-election-winner"
+  },
+  "race": "Oklahoma Senate"
+ },
+ "1075": {
+  "kalshi": "SENATEDE-26-R",
+  "market_id": "386",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Republican",
+   "slug": "delaware-senate-election-winner"
+  },
+  "race": "Delaware Senate"
+ },
+ "1076": {
+  "kalshi": "SENATERI-26-D",
+  "market_id": "387",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Jack Reed (D)",
+   "slug": "rhode-island-senate-election-winner"
+  },
+  "race": "Rhode Island Senate"
+ },
+ "1077": {
+  "kalshi": "SENATERI-26-R",
+  "market_id": "388",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Raymond McKay (R)",
+   "slug": "rhode-island-senate-election-winner"
+  },
+  "race": "Rhode Island Senate"
+ },
+ "840": {
+  "kalshi": null,
+  "market_id": "151",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Democratic Party",
+   "slug": "which-party-will-win-the-house-in-2026"
+  },
+  "race": "U.S. House"
+ },
+ "841": {
+  "kalshi": null,
+  "market_id": "152",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Republican Party",
+   "slug": "which-party-will-win-the-house-in-2026"
+  },
+  "race": "U.S. House"
+ },
+ "842": {
+  "kalshi": null,
+  "market_id": "153",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Democratic Party",
+   "slug": "which-party-will-win-the-senate-in-2026"
+  },
+  "race": "U.S. Senate"
+ },
+ "843": {
+  "kalshi": null,
+  "market_id": "154",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Republican Party",
+   "slug": "which-party-will-win-the-senate-in-2026"
+  },
+  "race": "U.S. Senate"
+ },
+ "844": {
+  "kalshi": "GOVPARTYAL-26-D",
+  "market_id": "155",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Doug Jones (D)",
+   "slug": "alabama-governor-winner-2026"
+  },
+  "race": "Alabama Governor"
+ },
+ "845": {
+  "kalshi": "GOVPARTYAL-26-R",
+  "market_id": "156",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Tommy Tuberville (R)",
+   "slug": "alabama-governor-winner-2026"
+  },
+  "race": "Alabama Governor"
+ },
+ "846": {
+  "kalshi": "GOVPARTYAR-26-D",
+  "market_id": "157",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Fredrick Love (D)",
+   "slug": "arkansas-governor-winner-2026"
+  },
+  "race": "Arkansas Governor"
+ },
+ "847": {
+  "kalshi": "GOVPARTYAR-26-R",
+  "market_id": "158",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Sarah Huckabee Sanders (R)",
+   "slug": "arkansas-governor-winner-2026"
+  },
+  "race": "Arkansas Governor"
+ },
+ "848": {
+  "kalshi": "GOVPARTYAZ-26-D",
+  "market_id": "159",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Katie Hobbs (D)",
+   "slug": "arizona-governor-winner-2026"
+  },
+  "race": "Arizona Governor"
+ },
+ "849": {
+  "kalshi": "GOVPARTYAZ-26-R",
+  "market_id": "160",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Andy Biggs (R)",
+   "slug": "arizona-governor-winner-2026"
+  },
+  "race": "Arizona Governor"
+ },
+ "850": {
+  "kalshi": "GOVPARTYCA-26-D",
+  "market_id": "161",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "California Governor"
+ },
+ "851": {
+  "kalshi": "GOVPARTYCA-26-R",
+  "market_id": "162",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "California Governor"
+ },
+ "852": {
+  "kalshi": "GOVPARTYCO-26-D",
+  "market_id": "163",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Phil Weiser (D)",
+   "slug": "colorado-governor-winner-2026"
+  },
+  "race": "Colorado Governor"
+ },
+ "853": {
+  "kalshi": "GOVPARTYCO-26-R",
+  "market_id": "164",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Victor Marx (R)",
+   "slug": "colorado-governor-winner-2026"
+  },
+  "race": "Colorado Governor"
+ },
+ "854": {
+  "kalshi": "GOVPARTYCT-26-R",
+  "market_id": "165",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Ryan Fazio (R)",
+   "slug": "connecticut-governor-winner-2026"
+  },
+  "race": "Connecticut Governor"
+ },
+ "855": {
+  "kalshi": "GOVPARTYGA-26-D",
+  "market_id": "166",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Keisha Lance Bottoms (D)",
+   "slug": "georgia-governor-winner-2026"
+  },
+  "race": "Georgia Governor"
+ },
+ "856": {
+  "kalshi": "GOVPARTYGA-26-R",
+  "market_id": "167",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Rick Jackson (R)",
+   "slug": "georgia-governor-winner-2026"
+  },
+  "race": "Georgia Governor"
+ },
+ "857": {
+  "kalshi": "GOVPARTYIA-26-D",
+  "market_id": "168",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Rob Sand (D)",
+   "slug": "iowa-governor-winner-2026"
+  },
+  "race": "Iowa Governor"
+ },
+ "858": {
+  "kalshi": "GOVPARTYIA-26-R",
+  "market_id": "169",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Zach Lahn (R)",
+   "slug": "iowa-governor-winner-2026"
+  },
+  "race": "Iowa Governor"
+ },
+ "859": {
+  "kalshi": "GOVPARTYID-26-D",
+  "market_id": "170",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Terri Pickens (D)",
+   "slug": "idaho-governor-winner-2026"
+  },
+  "race": "Idaho Governor"
+ },
+ "860": {
+  "kalshi": "GOVPARTYID-26-R",
+  "market_id": "171",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Brad Little (R)",
+   "slug": "idaho-governor-winner-2026"
+  },
+  "race": "Idaho Governor"
+ },
+ "861": {
+  "kalshi": "GOVPARTYIL-26-D",
+  "market_id": "172",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "JB Pritzker (D)",
+   "slug": "illinois-governor-winner-2026"
+  },
+  "race": "Illinois Governor"
+ },
+ "862": {
+  "kalshi": "GOVPARTYIL-26-R",
+  "market_id": "173",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Darren Bailey (R)",
+   "slug": "illinois-governor-winner-2026"
+  },
+  "race": "Illinois Governor"
+ },
+ "863": {
+  "kalshi": "GOVPARTYMD-26-D",
+  "market_id": "174",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Wes Moore (D)",
+   "slug": "maryland-governor-winner-2026"
+  },
+  "race": "Maryland Governor"
+ },
+ "864": {
+  "kalshi": "GOVPARTYMD-26-R",
+  "market_id": "175",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Dan Cox (R)",
+   "slug": "maryland-governor-winner-2026"
+  },
+  "race": "Maryland Governor"
+ },
+ "865": {
+  "kalshi": "GOVPARTYME-26-D",
+  "market_id": "176",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Hannah Pingree (D)",
+   "slug": "maine-governor-winner-2026"
+  },
+  "race": "Maine Governor"
+ },
+ "866": {
+  "kalshi": "GOVPARTYME-26-R",
+  "market_id": "177",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Robert Charles (R)",
+   "slug": "maine-governor-winner-2026"
+  },
+  "race": "Maine Governor"
+ },
+ "867": {
+  "kalshi": "GOVPARTYNE-26-D",
+  "market_id": "178",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Lynne Walz (D)",
+   "slug": "nebraska-governor-winner-2026"
+  },
+  "race": "Nebraska Governor"
+ },
+ "868": {
+  "kalshi": "GOVPARTYNE-26-R",
+  "market_id": "179",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Jim Pillen (R)",
+   "slug": "nebraska-governor-winner-2026"
+  },
+  "race": "Nebraska Governor"
+ },
+ "869": {
+  "kalshi": "GOVPARTYNM-26-D",
+  "market_id": "180",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Deb Haaland (D)",
+   "slug": "new-mexico-governor-winner-2026"
+  },
+  "race": "New Mexico Governor"
+ },
+ "870": {
+  "kalshi": "GOVPARTYNM-26-R",
+  "market_id": "181",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Gregg Hull (R)",
+   "slug": "new-mexico-governor-winner-2026"
+  },
+  "race": "New Mexico Governor"
+ },
+ "871": {
+  "kalshi": "GOVPARTYNV-26-D",
+  "market_id": "182",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Aaron Ford (D)",
+   "slug": "nevada-governor-winner-2026"
+  },
+  "race": "Nevada Governor"
+ },
+ "872": {
+  "kalshi": "GOVPARTYNV-26-R",
+  "market_id": "183",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Joe Lombardo (R)",
+   "slug": "nevada-governor-winner-2026"
+  },
+  "race": "Nevada Governor"
+ },
+ "873": {
+  "kalshi": "GOVPARTYNY-26-D",
+  "market_id": "184",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Kathy Hochul (D)",
+   "slug": "new-york-governor-winner-2026"
+  },
+  "race": "New York Governor"
+ },
+ "874": {
+  "kalshi": "GOVPARTYNY-26-R",
+  "market_id": "185",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Bruce Blakeman (R)",
+   "slug": "new-york-governor-winner-2026"
+  },
+  "race": "New York Governor"
+ },
+ "875": {
+  "kalshi": "GOVPARTYOK-26-D",
+  "market_id": "186",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Cyndi Munson (D)",
+   "slug": "oklahoma-governor-winner-2026"
+  },
+  "race": "Oklahoma Governor"
+ },
+ "876": {
+  "kalshi": "GOVPARTYOR-26-D",
+  "market_id": "187",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Tina Kotek (D)",
+   "slug": "oregon-governor-winner-2026"
+  },
+  "race": "Oregon Governor"
+ },
+ "877": {
+  "kalshi": "GOVPARTYOR-26-R",
+  "market_id": "188",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Christine Drazan (R)",
+   "slug": "oregon-governor-winner-2026"
+  },
+  "race": "Oregon Governor"
+ },
+ "878": {
+  "kalshi": "GOVPARTYPA-26-D",
+  "market_id": "189",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Josh Shapiro (D)",
+   "slug": "pennsylvania-governor-winner-2026"
+  },
+  "race": "Pennsylvania Governor"
+ },
+ "879": {
+  "kalshi": "GOVPARTYPA-26-R",
+  "market_id": "190",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Stacy Garrity (R)",
+   "slug": "pennsylvania-governor-winner-2026"
+  },
+  "race": "Pennsylvania Governor"
+ },
+ "881": {
+  "kalshi": "GOVPARTYSC-26-D",
+  "market_id": "192",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Jermaine Johnson (D)",
+   "slug": "south-carolina-governor-winner-2026"
+  },
+  "race": "South Carolina Governor"
+ },
+ "882": {
+  "kalshi": "GOVPARTYSC-26-R",
+  "market_id": "193",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Alan Wilson (R)",
+   "slug": "south-carolina-governor-winner-2026"
+  },
+  "race": "South Carolina Governor"
+ },
+ "883": {
+  "kalshi": "GOVPARTYSD-26-D",
+  "market_id": "194",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Dan Ahlers (D)",
+   "slug": "south-dakota-governor-winner-2026"
+  },
+  "race": "South Dakota Governor"
+ },
+ "884": {
+  "kalshi": "GOVPARTYTX-26-D",
+  "market_id": "195",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "Texas Governor"
+ },
+ "885": {
+  "kalshi": "GOVPARTYTX-26-R",
+  "market_id": "196",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Greg Abbott (R)",
+   "slug": "texas-governor-winner-2026"
+  },
+  "race": "Texas Governor"
+ },
+ "886": {
+  "kalshi": "HOUSEAZ1-26-D",
+  "market_id": "197",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Amish Shah (D)",
+   "slug": "az-01-house-election-winner"
+  },
+  "race": "AZ-01 House race"
+ },
+ "887": {
+  "kalshi": "HOUSEAZ1-26-R",
+  "market_id": "198",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Jay Feely (R)",
+   "slug": "az-01-house-election-winner"
+  },
+  "race": "AZ-01 House race"
+ },
+ "888": {
+  "kalshi": "HOUSEAZ6-26-D",
+  "market_id": "199",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "JoAnna Mendoza (D)",
+   "slug": "az-06-house-election-winner"
+  },
+  "race": "AZ-06 House race"
+ },
+ "889": {
+  "kalshi": "HOUSEAZ6-26-R",
+  "market_id": "200",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Juan Ciscomani (R)",
+   "slug": "az-06-house-election-winner"
+  },
+  "race": "AZ-06 House race"
+ },
+ "890": {
+  "kalshi": "HOUSECA22-26-D",
+  "market_id": "201",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Randy Villegas (D)",
+   "slug": "which-party-will-win-the-house-race-for-the-ca-22-seat"
+  },
+  "race": "CA-22 House race"
+ },
+ "891": {
+  "kalshi": "HOUSECA22-26-R",
+  "market_id": "202",
+  "party": "Republican Party",
+  "poly": {
+   "group": "David Valadao (R)",
+   "slug": "which-party-will-win-the-house-race-for-the-ca-22-seat"
+  },
+  "race": "CA-22 House race"
+ },
+ "892": {
+  "kalshi": null,
+  "market_id": "203",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "CA-48 House race"
+ },
+ "893": {
+  "kalshi": null,
+  "market_id": "204",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "CA-48 House race"
+ },
+ "894": {
+  "kalshi": "HOUSECO3-26-D",
+  "market_id": "205",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Dwayne Romero (D)",
+   "slug": "co-03-house-election-winner"
+  },
+  "race": "CO-03 House race"
+ },
+ "895": {
+  "kalshi": "HOUSECO3-26-R",
+  "market_id": "206",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Jeff Hurd (R)",
+   "slug": "co-03-house-election-winner"
+  },
+  "race": "CO-03 House race"
+ },
+ "896": {
+  "kalshi": null,
+  "market_id": "207",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "CO-04 House race"
+ },
+ "897": {
+  "kalshi": null,
+  "market_id": "208",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "CO-04 House race"
+ },
+ "898": {
+  "kalshi": "HOUSECO8-26-D",
+  "market_id": "209",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Manny Rutinel (D)",
+   "slug": "co-08-house-election-winner"
+  },
+  "race": "CO-08 House race"
+ },
+ "899": {
+  "kalshi": "HOUSECO8-26-R",
+  "market_id": "210",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Gabe Evans (R)",
+   "slug": "co-08-house-election-winner"
+  },
+  "race": "CO-08 House race"
+ },
+ "900": {
+  "kalshi": null,
+  "market_id": "211",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "FL-09 House race"
+ },
+ "901": {
+  "kalshi": "HOUSEFL13-26-R",
+  "market_id": "212",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Anna Paulina Luna (R)",
+   "slug": "fl-13-house-election-winner"
+  },
+  "race": "FL-13 House race"
+ },
+ "902": {
+  "kalshi": "HOUSEIA1-26-D",
+  "market_id": "213",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Christina Bohannan (D)",
+   "slug": "ia-01-house-election-winner"
+  },
+  "race": "IA-01 House race"
+ },
+ "903": {
+  "kalshi": "HOUSEIA1-26-R",
+  "market_id": "214",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Mariannette Miller-Meeks (R)",
+   "slug": "ia-01-house-election-winner"
+  },
+  "race": "IA-01 House race"
+ },
+ "904": {
+  "kalshi": null,
+  "market_id": "215",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "IA-02 House race"
+ },
+ "905": {
+  "kalshi": null,
+  "market_id": "216",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "IA-02 House race"
+ },
+ "906": {
+  "kalshi": "HOUSEIA3-26-D",
+  "market_id": "217",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Sarah Trone Garriott (D)",
+   "slug": "ia-03-house-election-winner"
+  },
+  "race": "IA-03 House race"
+ },
+ "907": {
+  "kalshi": "HOUSEIA3-26-R",
+  "market_id": "218",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Zach Nunn (R)",
+   "slug": "ia-03-house-election-winner"
+  },
+  "race": "IA-03 House race"
+ },
+ "908": {
+  "kalshi": null,
+  "market_id": "219",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "KY-04 House race"
+ },
+ "909": {
+  "kalshi": null,
+  "market_id": "220",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "KY-04 House race"
+ },
+ "910": {
+  "kalshi": "HOUSEME2-26-D",
+  "market_id": "221",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "ME-02 House race"
+ },
+ "911": {
+  "kalshi": "HOUSEME2-26-R",
+  "market_id": "222",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "ME-02 House race"
+ },
+ "912": {
+  "kalshi": "HOUSEMT1-26-D",
+  "market_id": "223",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "MT-01 House race"
+ },
+ "913": {
+  "kalshi": "HOUSEMT1-26-R",
+  "market_id": "224",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "MT-01 House race"
+ },
+ "914": {
+  "kalshi": "HOUSENE2-26-D",
+  "market_id": "225",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "NE-02 House race"
+ },
+ "915": {
+  "kalshi": "HOUSENE2-26-R",
+  "market_id": "226",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "NE-02 House race"
+ },
+ "916": {
+  "kalshi": "HOUSENJ7-26-D",
+  "market_id": "227",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "NJ-07 House race"
+ },
+ "917": {
+  "kalshi": "HOUSENJ7-26-R",
+  "market_id": "228",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "NJ-07 House race"
+ },
+ "918": {
+  "kalshi": null,
+  "market_id": "229",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "NY-13 House race"
+ },
+ "919": {
+  "kalshi": null,
+  "market_id": "230",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "NY-13 House race"
+ },
+ "920": {
+  "kalshi": "HOUSENY17-26-D",
+  "market_id": "231",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "NY-17 House race"
+ },
+ "921": {
+  "kalshi": "HOUSENY17-26-R",
+  "market_id": "232",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "NY-17 House race"
+ },
+ "922": {
+  "kalshi": "HOUSEPA1-26-D",
+  "market_id": "233",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "PA-01 House race"
+ },
+ "923": {
+  "kalshi": "HOUSEPA1-26-R",
+  "market_id": "234",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "PA-01 House race"
+ },
+ "924": {
+  "kalshi": "HOUSEPA7-26-D",
+  "market_id": "235",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "PA-07 House race"
+ },
+ "925": {
+  "kalshi": "HOUSEPA7-26-R",
+  "market_id": "236",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "PA-07 House race"
+ },
+ "926": {
+  "kalshi": "HOUSEPA8-26-D",
+  "market_id": "237",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "PA-08 House race"
+ },
+ "927": {
+  "kalshi": "HOUSEPA8-26-R",
+  "market_id": "238",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "PA-08 House race"
+ },
+ "928": {
+  "kalshi": "HOUSEPA10-26-D",
+  "market_id": "239",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "PA-10 House race"
+ },
+ "929": {
+  "kalshi": "HOUSEPA10-26-R",
+  "market_id": "240",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "PA-10 House race"
+ },
+ "930": {
+  "kalshi": null,
+  "market_id": "241",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "SC-01 House race"
+ },
+ "931": {
+  "kalshi": null,
+  "market_id": "242",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "SC-01 House race"
+ },
+ "932": {
+  "kalshi": "HOUSETX15-26-D",
+  "market_id": "243",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "TX-15 House race"
+ },
+ "933": {
+  "kalshi": "HOUSETX15-26-R",
+  "market_id": "244",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "TX-15 House race"
+ },
+ "934": {
+  "kalshi": null,
+  "market_id": "245",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "TX-23 House race"
+ },
+ "935": {
+  "kalshi": null,
+  "market_id": "246",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "TX-23 House race"
+ },
+ "936": {
+  "kalshi": "HOUSETX28-26-D",
+  "market_id": "247",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "TX-28 House race"
+ },
+ "937": {
+  "kalshi": "HOUSETX28-26-R",
+  "market_id": "248",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "TX-28 House race"
+ },
+ "938": {
+  "kalshi": "HOUSEVA1-26-R",
+  "market_id": "249",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "VA-01 House race"
+ },
+ "939": {
+  "kalshi": "HOUSEVA2-26-R",
+  "market_id": "250",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "VA-02 House race"
+ },
+ "940": {
+  "kalshi": "HOUSEVA7-26-D",
+  "market_id": "251",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "VA-07 House race"
+ },
+ "941": {
+  "kalshi": null,
+  "market_id": "252",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Everett Wess (D)",
+   "slug": "alabama-senate-election-winner-154"
+  },
+  "race": "Alabama Senate"
+ },
+ "942": {
+  "kalshi": null,
+  "market_id": "253",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Barry Moore (R)",
+   "slug": "alabama-senate-election-winner-154"
+  },
+  "race": "Alabama Senate"
+ },
+ "943": {
+  "kalshi": null,
+  "market_id": "254",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Hallie Shoffner (D)",
+   "slug": "arkansas-senate-election-winner"
+  },
+  "race": "Arkansas Senate"
+ },
+ "944": {
+  "kalshi": null,
+  "market_id": "255",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "Arkansas Senate"
+ },
+ "945": {
+  "kalshi": null,
+  "market_id": "256",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "John Hickenlooper (D)",
+   "slug": "colorado-senate-election-winner"
+  },
+  "race": "Colorado Senate"
+ },
+ "946": {
+  "kalshi": null,
+  "market_id": "257",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Mark Baisley (R)",
+   "slug": "colorado-senate-election-winner"
+  },
+  "race": "Colorado Senate"
+ },
+ "947": {
+  "kalshi": null,
+  "market_id": "258",
+  "party": "Democratic Party",
+  "poly": null,
+  "race": "Georgia Senate"
+ },
+ "948": {
+  "kalshi": null,
+  "market_id": "259",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Mike Collins (R)",
+   "slug": "georgia-senate-election-winner"
+  },
+  "race": "Georgia Senate"
+ },
+ "949": {
+  "kalshi": null,
+  "market_id": "260",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Josh Turek (D)",
+   "slug": "iowa-senate-election-winner"
+  },
+  "race": "Iowa Senate"
+ },
+ "950": {
+  "kalshi": null,
+  "market_id": "261",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Ashley Hinson (R)",
+   "slug": "iowa-senate-election-winner"
+  },
+  "race": "Iowa Senate"
+ },
+ "951": {
+  "kalshi": null,
+  "market_id": "262",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Democrat",
+   "slug": "idaho-senate-election-winner"
+  },
+  "race": "Idaho Senate"
+ },
+ "952": {
+  "kalshi": null,
+  "market_id": "263",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Jim Risch (R)",
+   "slug": "idaho-senate-election-winner"
+  },
+  "race": "Idaho Senate"
+ },
+ "953": {
+  "kalshi": null,
+  "market_id": "264",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Juliana Stratton (D)",
+   "slug": "illinois-senate-election-winner"
+  },
+  "race": "Illinois Senate"
+ },
+ "954": {
+  "kalshi": null,
+  "market_id": "265",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Don Tracy (R)",
+   "slug": "illinois-senate-election-winner"
+  },
+  "race": "Illinois Senate"
+ },
+ "955": {
+  "kalshi": null,
+  "market_id": "266",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Charles Booker (D)",
+   "slug": "kentucky-senate-election-winner"
+  },
+  "race": "Kentucky Senate"
+ },
+ "956": {
+  "kalshi": null,
+  "market_id": "267",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Andy Barr (R)",
+   "slug": "kentucky-senate-election-winner"
+  },
+  "race": "Kentucky Senate"
+ },
+ "957": {
+  "kalshi": null,
+  "market_id": "268",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Jamie Davis (D)",
+   "slug": "louisiana-senate-election-winner"
+  },
+  "race": "Louisiana Senate"
+ },
+ "958": {
+  "kalshi": null,
+  "market_id": "269",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Julia Letlow (R)",
+   "slug": "louisiana-senate-election-winner"
+  },
+  "race": "Louisiana Senate"
+ },
+ "959": {
+  "kalshi": "SENATEME-26-D",
+  "market_id": "270",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Troy Jackson (D)",
+   "slug": "maine-senate-election-winner"
+  },
+  "race": "Maine Senate"
+ },
+ "960": {
+  "kalshi": "SENATEME-26-R",
+  "market_id": "271",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Susan Collins (R)",
+   "slug": "maine-senate-election-winner"
+  },
+  "race": "Maine Senate"
+ },
+ "961": {
+  "kalshi": "SENATEMS-26-D",
+  "market_id": "272",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Scott Colom (D)",
+   "slug": "mississippi-senate-election-winner"
+  },
+  "race": "Mississippi Senate"
+ },
+ "962": {
+  "kalshi": "SENATEMS-26-R",
+  "market_id": "273",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Cindy Hyde-Smith (R)",
+   "slug": "mississippi-senate-election-winner"
+  },
+  "race": "Mississippi Senate"
+ },
+ "966": {
+  "kalshi": null,
+  "market_id": "277",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Roy Cooper (D)",
+   "slug": "north-carolina-senate-election-winner"
+  },
+  "race": "North Carolina Senate"
+ },
+ "967": {
+  "kalshi": null,
+  "market_id": "278",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Michael Whatley (R)",
+   "slug": "north-carolina-senate-election-winner"
+  },
+  "race": "North Carolina Senate"
+ },
+ "971": {
+  "kalshi": "SENATENJ-26-D",
+  "market_id": "282",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Cory Booker (D)",
+   "slug": "new-jersey-senate-election-winner"
+  },
+  "race": "New Jersey Senate"
+ },
+ "972": {
+  "kalshi": "SENATENJ-26-R",
+  "market_id": "283",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Justin Murphy (R)",
+   "slug": "new-jersey-senate-election-winner"
+  },
+  "race": "New Jersey Senate"
+ },
+ "973": {
+  "kalshi": "SENATENM-26-D",
+  "market_id": "284",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Ben Ray Luj\u00e1n (D)",
+   "slug": "new-mexico-senate-election-winner"
+  },
+  "race": "New Mexico Senate"
+ },
+ "974": {
+  "kalshi": "SENATENM-26-R",
+  "market_id": "285",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Larry Marker (R)",
+   "slug": "new-mexico-senate-election-winner"
+  },
+  "race": "New Mexico Senate"
+ },
+ "975": {
+  "kalshi": null,
+  "market_id": "286",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Kevin Hern (R)",
+   "slug": "oklahoma-senate-election-winner"
+  },
+  "race": "Oklahoma Senate"
+ },
+ "976": {
+  "kalshi": null,
+  "market_id": "287",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Jeff Merkley (D)",
+   "slug": "oregon-senate-election-winner"
+  },
+  "race": "Oregon Senate"
+ },
+ "977": {
+  "kalshi": null,
+  "market_id": "288",
+  "party": "Republican Party",
+  "poly": {
+   "group": "David Brock Smith (R)",
+   "slug": "oregon-senate-election-winner"
+  },
+  "race": "Oregon Senate"
+ },
+ "978": {
+  "kalshi": null,
+  "market_id": "289",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Annie Andrews (D)",
+   "slug": "south-carolina-senate-election-winner"
+  },
+  "race": "South Carolina Senate"
+ },
+ "979": {
+  "kalshi": null,
+  "market_id": "290",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Darline Graham Nordone (R)",
+   "slug": "south-carolina-senate-election-winner"
+  },
+  "race": "South Carolina Senate"
+ },
+ "980": {
+  "kalshi": null,
+  "market_id": "291",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Democrat",
+   "slug": "south-dakota-senate-election-winner"
+  },
+  "race": "South Dakota Senate"
+ },
+ "981": {
+  "kalshi": null,
+  "market_id": "292",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Mike Rounds (R)",
+   "slug": "south-dakota-senate-election-winner"
+  },
+  "race": "South Dakota Senate"
+ },
+ "982": {
+  "kalshi": "SENATETX-26-D",
+  "market_id": "293",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "James Talarico (D)",
+   "slug": "texas-senate-election-winner"
+  },
+  "race": "Texas Senate"
+ },
+ "983": {
+  "kalshi": "SENATETX-26-R",
+  "market_id": "294",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Ken Paxton (R)",
+   "slug": "texas-senate-election-winner"
+  },
+  "race": "Texas Senate"
+ },
+ "984": {
+  "kalshi": "SENATEVA-26-D",
+  "market_id": "295",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Mark Warner (D)",
+   "slug": "virginia-senate-election-winner"
+  },
+  "race": "Virginia Senate"
+ },
+ "985": {
+  "kalshi": "SENATEWV-26-D",
+  "market_id": "296",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Rachel Fetty Anderson (D)",
+   "slug": "west-virginia-senate-election-winner"
+  },
+  "race": "West Virginia Senate"
+ },
+ "986": {
+  "kalshi": "SENATEWV-26-R",
+  "market_id": "297",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Shelley Moore Capito (R)",
+   "slug": "west-virginia-senate-election-winner"
+  },
+  "race": "West Virginia Senate"
+ },
+ "987": {
+  "kalshi": "GOVPARTYCT-26-D",
+  "market_id": "298",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Ned Lamont (D)",
+   "slug": "connecticut-governor-winner-2026"
+  },
+  "race": "Connecticut Governor"
+ },
+ "988": {
+  "kalshi": "GOVPARTYFL-26-D",
+  "market_id": "299",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "David Jolly (D)",
+   "slug": "florida-governor-winner-2026"
+  },
+  "race": "Florida Governor"
+ },
+ "989": {
+  "kalshi": "GOVPARTYFL-26-R",
+  "market_id": "300",
+  "party": "Republican Party",
+  "poly": null,
+  "race": "Florida Governor"
+ },
+ "990": {
+  "kalshi": "GOVPARTYHI-26-D",
+  "market_id": "301",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Josh Green (D)",
+   "slug": "hawaii-governor-winner-2026"
+  },
+  "race": "Hawaii Governor"
+ },
+ "991": {
+  "kalshi": "GOVPARTYHI-26-R",
+  "market_id": "302",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Gary Cordery (R)",
+   "slug": "hawaii-governor-winner-2026"
+  },
+  "race": "Hawaii Governor"
+ },
+ "992": {
+  "kalshi": "GOVPARTYKS-27-D",
+  "market_id": "303",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Cindy Holscher (D)",
+   "slug": "kansas-governor-winner-2026"
+  },
+  "race": "Kansas Governor"
+ },
+ "993": {
+  "kalshi": "GOVPARTYKS-27-R",
+  "market_id": "304",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Ty Masterson (R)",
+   "slug": "kansas-governor-winner-2026"
+  },
+  "race": "Kansas Governor"
+ },
+ "994": {
+  "kalshi": "GOVPARTYMI-26-D",
+  "market_id": "305",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Jocelyn Benson (D)",
+   "slug": "michigan-governor-winner-2026"
+  },
+  "race": "Michigan Governor"
+ },
+ "995": {
+  "kalshi": "GOVPARTYMI-26-R",
+  "market_id": "306",
+  "party": "Republican Party",
+  "poly": {
+   "group": "John James (R)",
+   "slug": "michigan-governor-winner-2026"
+  },
+  "race": "Michigan Governor"
+ },
+ "996": {
+  "kalshi": "GOVPARTYMN-26-D",
+  "market_id": "307",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Amy Klobuchar (D)",
+   "slug": "minnesota-governor-winner-2026"
+  },
+  "race": "Minnesota Governor"
+ },
+ "997": {
+  "kalshi": "GOVPARTYMN-26-R",
+  "market_id": "308",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Lisa Demuth (R)",
+   "slug": "minnesota-governor-winner-2026"
+  },
+  "race": "Minnesota Governor"
+ },
+ "998": {
+  "kalshi": "GOVPARTYSD-26-R",
+  "market_id": "309",
+  "party": "Republican Party",
+  "poly": {
+   "group": "Larry Rhoden (R)",
+   "slug": "south-dakota-governor-winner-2026"
+  },
+  "race": "South Dakota Governor"
+ },
+ "999": {
+  "kalshi": "GOVPARTYTN-26-D",
+  "market_id": "310",
+  "party": "Democratic Party",
+  "poly": {
+   "group": "Jerri Green (D)",
+   "slug": "tennessee-governor-winner-2026"
+  },
+  "race": "Tennessee Governor"
+ }
+}

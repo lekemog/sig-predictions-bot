@@ -20,6 +20,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import arb_engine
+import value_engine
 from decision_engine import evaluate, executable, timestamp
 from turnover import dip_entry_reason, profit_exit_target
 
@@ -173,14 +174,15 @@ def risk_limits(config):
     if not isinstance(supplied, dict) or set(supplied) - set(legacy):
         raise Halt('Invalid risk profile keys')
     limits = dict(legacy, **supplied)
-    ceilings = dict(committed=100000, basket=15000, clip=5000, race=2500,
-                    directional=15000, factor=7500)
+    # Owner authorized deploying the full 100k account (18 Oct 2026).
+    ceilings = dict(committed=100000, basket=15000, clip=5000, race=5000,
+                    directional=75000, factor=75000)
     for key, value in limits.items():
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
             raise Halt('Risk limits must be positive integers')
         if key in ceilings and value > ceilings[key]:
             raise Halt('Risk profile exceeds delegated staged ceiling')
-    if (limits['reserve'] < 25000 or limits['committed'] > 100000
+    if (limits['reserve'] < 1000 or limits['committed'] > 100000
             or not limits['race'] <= limits['factor'] <= limits['directional'] <= limits['committed']
             or limits['basket'] > limits['committed']):
         raise Halt('Inconsistent risk profile')
@@ -223,7 +225,7 @@ class API:
         # Only reads can retry here. Writes retain their durable reconciliation path.
         attempts = 3 if method == 'GET' else 1
         for attempt in range(attempts):
-            delay = max(0, self.last[bucket] + (0.8 if bucket == 'GET' else 2.2) - time.monotonic())
+            delay = max(0, self.last[bucket] + (1.0 if bucket == 'GET' else 2.2) - time.monotonic())
             if delay:
                 time.sleep(delay)
             self.last[bucket] = time.monotonic()
@@ -508,6 +510,108 @@ def defensive_price_reason(config, quantity, spend, floor, liquidation):
     if spend - liquidation > spend * policy['max_round_trip_loss_fraction'] + 1e-8:
         return 'Executable round-trip loss exceeds defensive budget'
     return None
+
+
+def value_policy(config):
+    """Validated Kalshi/Polymarket-anchored settings, or None when disabled."""
+    p = config.get('value')
+    if p is None or (isinstance(p, dict) and p.get('enabled') is False):
+        return None
+    if not isinstance(p, dict) or p.get('enabled') is not True:
+        raise Halt('Invalid value policy')
+    out = {'min_edge': p.get('min_edge', .03), 'exit_edge': p.get('exit_edge', .01),
+           'race_cap': p.get('race_cap', 3000), 'min_profit': p.get('min_profit', 5),
+           'max_fair_age_seconds': p.get('max_fair_age_seconds', 900)}
+    bounds = {'min_edge': (.01, .5), 'exit_edge': (0, .5), 'race_cap': (1, 5000),
+              'min_profit': (0, 1000), 'max_fair_age_seconds': (30, 3600)}
+    for k, (lo, hi) in bounds.items():
+        v = out[k]
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or not lo <= v <= hi:
+            raise Halt('Invalid value policy value: ' + k)
+    return out
+
+
+def value_plan(api, state, config, race, books=None, entry_observer=None):
+    """Trade one clean D/R race against the outside-venue fair band.
+
+    Exits first: sell a held side when SIG bids above the band by exit_edge.
+    Entries: buy the side SIG offers below the band by min_edge, walking depth
+    within the race cap, directional cap, committed limit and cash reserve.
+    """
+    policy = value_policy(config)
+    if policy is None:
+        return None
+    observe = entry_observer or (lambda reason: None)
+    fair_all = config.get('_fair') or {}
+    try:
+        age = (now() - timestamp(fair_all['at'])).total_seconds()
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not 0 <= age <= policy['max_fair_age_seconds']:
+        return None
+    fair = fair_all.get('legs', {})
+    ids = [str(l['exchange_id']) for l in race['legs']]
+    if not any(i in fair for i in ids):
+        return None
+    if books is None or any((now() - timestamp(b['_received_at'])).total_seconds() > 60
+                            for b in books.values()):
+        books = fresh_books(api, race['legs'])
+    risk = risk_limits(config)
+    positions = signed_positions(state)
+    rows = {str(p['exchangeId']): p for p in state['positions']}
+    race_cost = sum(float(rows[i]['costBasis']) for i in ids if i in rows)
+    committed, _, directional = portfolio_risk(state, config)
+    best = None
+    for leg in race['legs']:
+        i, f, pos = str(leg['exchange_id']), fair.get(str(leg['exchange_id'])), positions.get(str(leg['exchange_id']), 0)
+        if not f or not pos:
+            continue
+        side = 'yes' if pos > 0 else 'no'
+        _, mid, sell_value = value_engine.side_fair(f, side)
+        q, proceeds, worst = value_engine.sell_walk(arb_engine.ladder(books[i], side, 'sell'),
+                                                    sell_value + policy['exit_edge'],
+                                                    min(int(abs(pos)), risk['clip']))
+        gain = proceeds - q * mid
+        if q and (best is None or gain > best['robust_profit']):
+            best = {'kind': 'value_exit', 'name': race['name'], 'action': 'sell', 'side': side,
+                    'quantity': q, 'legs': [leg], 'prices': [tick(worst)], 'robust_profit': gain,
+                    'expected_profit': gain, 'fair': f, 'race': race}
+    if best is None:
+        if config.get('entries_paused', False) is not False:
+            return None
+        budget = min(policy['race_cap'] - race_cost, risk['directional'] - directional,
+                     risk['committed'] - committed, state['cash'] - risk['reserve'])
+        for leg in race['legs']:
+            i = str(leg['exchange_id'])
+            f, pos = fair.get(i), positions.get(i, 0)
+            if not f or budget <= 0:
+                continue
+            for side in ('yes', 'no'):
+                if pos and (pos > 0) != (side == 'yes'):
+                    continue  # never net against an opposite holding
+                buy_value, mid, _ = value_engine.side_fair(f, side)
+                q, cost, worst = value_engine.buy_walk(arb_engine.ladder(books[i], side, 'buy'),
+                                                       buy_value - policy['min_edge'], budget, risk['clip'])
+                if q and q * worst > budget:
+                    q = int(budget // worst)
+                    cost = min(cost, q * worst)
+                if not q:
+                    continue
+                robust, expected = q * buy_value - cost, q * mid - cost
+                if robust < policy['min_profit']:
+                    continue
+                if best is None or expected > best['expected_profit']:
+                    best = {'kind': 'value_entry', 'name': race['name'], 'action': 'buy',
+                            'side': side, 'quantity': q, 'legs': [leg], 'prices': [tick(worst)],
+                            'max_spend': q * worst, 'robust_profit': robust,
+                            'expected_profit': expected, 'fair': f, 'race': race}
+    if best is None:
+        return None
+    best['contracts'] = validate_contracts(api, race)
+    observe({'event': 'value_candidate', 'basket': race['name'],
+             **{k: best[k] for k in ('kind', 'side', 'quantity', 'prices', 'robust_profit', 'expected_profit', 'fair')}})
+    best['objective'] = 'buy below / sell above Kalshi-Polymarket fair band; directional settlement risk'
+    return best
 
 
 def arb_basket_plan(api, state, config, basket, policy, entry_observer=None):
@@ -802,11 +906,13 @@ class Runner:
     def submit(self, plan, state):
         self.check_stop()
         if (self.config.get('entries_paused', False) is not False
-                and plan.get('kind') != 'basket_exit'):
+                and not str(plan.get('kind', '')).endswith('_exit')):
             raise Halt('New entries paused for drawdown review')
         if (self.config.get('defensive_entries') is not None
                 and plan.get('kind') not in ('basket_entry', 'basket_exit')):
             raise Halt('Defensive policy disables directional submissions')
+        if str(plan.get('kind', '')).startswith('value') and value_policy(self.config) is None:
+            raise Halt('Value trading is disabled')
         if plan.get('kind') == 'basket_entry':
             baskets = [b for b in self.config['baskets'] if b['name'] == plan.get('name')]
             if len(baskets) != 1 or baskets[0]['legs'] != plan.get('legs'):
@@ -1058,6 +1164,17 @@ class Runner:
                 continue
             try:
                 books = fresh_books(self.api, basket['legs'])
+                if value_policy(self.config) is not None:
+                    try:
+                        vp = value_plan(self.api, state, self.config, candidate, books,
+                                        self.observer(basket, blocked))
+                    except Halt as e:
+                        vp = None
+                        self.journal.event('value_abstain', {'basket': basket['name'], 'reason': str(e)})
+                    if vp:
+                        plans.append(vp)
+                if any(signed_positions(state).get(i, 0) for i in ids):
+                    continue  # directional holding: no NO basket on top of it
                 per_share, fixed, _ = arb_charges(self.config, policy, len(ids))
                 tops = [arb_engine.ladder(books[i], 'no', 'buy') for i in ids]
                 if any(not t for t in tops):
@@ -1137,7 +1254,7 @@ class Runner:
             if plan:
                 plans.append(plan)
         # One job per cycle; always obtain a fresh state and prices on the next cycle.
-        plans.sort(key=lambda p: (p['kind'] == 'basket_exit', p.get('robust_profit', p.get('conservative_limit_edge', 0))), reverse=True)
+        plans.sort(key=lambda p: (str(p['kind']).endswith('_exit'), p.get('robust_profit', p.get('conservative_limit_edge', 0))), reverse=True)
         if not plans:
             self.drop_unused_auto(None)
             return [{'decision': 'NO_TRADE', 'cash': state['cash']}]
@@ -1148,6 +1265,8 @@ class Runner:
         if selected['kind'].startswith('basket'):
             b = next(b for b in self.config['baskets'] if b['name'] == selected['name'])
             selected = basket_plan(self.api, state, self.config, b)
+        elif selected['kind'].startswith('value'):
+            selected = value_plan(self.api, state, self.config, selected['race'])
         else:
             selected = directional_plan(self.api, state, self.config, selected['case'])
         return [self.submit(selected, state)] if selected else [{'decision': 'NO_TRADE_AFTER_REFRESH'}]
