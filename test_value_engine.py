@@ -103,3 +103,25 @@ class PlanTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class HaltRegressionTests(unittest.TestCase):
+    def test_value_selection_drops_same_race_arb_basket(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        journal = Journal(str(Path(tmp.name) / 'j.sqlite')); self.addCleanup(journal.db.close)
+        cfg = fair_cfg({'33': {'lo': .70, 'hi': .71, 'mid': .705, 'sources': ['kalshi']}})
+        cfg['_universe'] = [RACE]   # UniverseFake also prices this race as an arb
+        result = Runner(UniverseFake(), journal, cfg, live=False).cycle()
+        self.assertEqual(result[0]['plan']['kind'], 'value_entry')
+        self.assertEqual([b['name'] for b in cfg['baskets']], ['test'])
+
+    def test_live_value_trade_completes_without_halting(self):
+        # Reproduces 18 Oct 02:34 UTC: fill succeeded, then post-fill check halted.
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        journal = Journal(str(Path(tmp.name) / 'j.sqlite')); self.addCleanup(journal.db.close)
+        cfg = fair_cfg({'33': {'lo': .70, 'hi': .71, 'mid': .705, 'sources': ['kalshi']}})
+        cfg['_universe'] = [RACE]
+        api = UniverseFake(); api.fill = (5000, 5000)
+        result = Runner(api, journal, cfg, live=True).cycle()
+        self.assertIn('completed', result[0])
+        self.assertEqual(journal.pending(), [])

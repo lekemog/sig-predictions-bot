@@ -1174,6 +1174,7 @@ class Runner:
                         self.journal.event('value_abstain', {'basket': basket['name'], 'reason': str(e)})
                     if vp:
                         plans.append(vp)
+                        continue  # one strategy per race per cycle
                 if any(signed_positions(state).get(i, 0) for i in ids):
                     continue  # directional holding: no NO basket on top of it
                 per_share, fixed, _ = arb_charges(self.config, policy, len(ids))
@@ -1259,7 +1260,9 @@ class Runner:
         if not plans:
             self.drop_unused_auto(None)
             return [{'decision': 'NO_TRADE', 'cash': state['cash']}]
-        self.drop_unused_auto(plans[0]['name'])
+        # Keep a prescreened basket only if the selected plan IS that basket: a
+        # value trade on the same race must not leave a one-legged "hedge".
+        self.drop_unused_auto(plans[0]['name'] if plans[0]['kind'].startswith('basket') else None)
         # Long scans must not use stale limits/state to submit. Rebuild selected plan.
         state = self.api.state()
         selected = plans[0]
