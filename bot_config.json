@@ -2,10 +2,11 @@
   "entries_paused": false,
   "risk_limits": {
     "committed": 100000,
-    "reserve": 25000,
-    "race": 1500,
-    "directional": 15000,
-    "factor": 6000
+    "reserve": 2000,
+    "clip": 5000,
+    "race": 3000,
+    "directional": 60000,
+    "factor": 60000
   },
   "costs": {
     "verified": false,
@@ -247,7 +248,15 @@
     "p_double_yes": 0.002,
     "leg_buffer": "empirical",
     "redeploy_haircut": 0.5,
-    "universe_races_per_sweep": 20,
-    "max_jobs_per_run": 3
+    "universe_races_per_sweep": 25,
+    "max_jobs_per_run": 5
+  },
+  "value": {
+    "enabled": true,
+    "min_edge": 0.03,
+    "exit_edge": 0.01,
+    "race_cap": 3000,
+    "min_profit": 5,
+    "max_fair_age_seconds": 900
   }
 }
