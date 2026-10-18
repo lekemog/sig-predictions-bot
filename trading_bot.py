@@ -225,7 +225,7 @@ class API:
         # Only reads can retry here. Writes retain their durable reconciliation path.
         attempts = 3 if method == 'GET' else 1
         for attempt in range(attempts):
-            delay = max(0, self.last[bucket] + (1.0 if bucket == 'GET' else 2.2) - time.monotonic())
+            delay = max(0, self.last[bucket] + (1.2 if bucket == 'GET' else 2.2) - time.monotonic())
             if delay:
                 time.sleep(delay)
             self.last[bucket] = time.monotonic()
@@ -256,7 +256,8 @@ class API:
                               'elapsed_seconds': round(time.monotonic() - started, 3)}), flush=True)
             # Never expose credentials, headers, server bodies or exception strings.
             if method == 'GET' and retryable and attempt + 1 < attempts:
-                time.sleep(2 ** attempt)
+                # SIG's 429 window outlasts a 1-2s pause; back off for real.
+                time.sleep(8 * (attempt + 1) if category == 'http_429' else 2 ** attempt)
                 continue
             if method == 'GET':
                 raise Halt(f'{failure}; read failed after {attempt + 1} attempt(s)') from None
