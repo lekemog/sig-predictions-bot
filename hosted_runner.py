@@ -7,7 +7,8 @@ import urllib.request
 from pathlib import Path
 
 import arb_engine
-from trading_bot import API, END, Halt, Journal, Runner, arb_policy, now
+import value_engine
+from trading_bot import API, END, Halt, Journal, Runner, arb_policy, now, value_policy
 from research_runner import ReadOnlyAPI, collect
 from market_brain import BrainStore
 from dip_monitor import scan as scan_dips
@@ -134,7 +135,29 @@ def prepare_universe(config, data):
     catalog = (data.get('last_universe_scan') or {}).get('catalog') or {}
     universe = arb_engine.discover(catalog, config['baskets'])
     slot = int(now().timestamp() // 600)
-    config['_universe'] = arb_engine.rotation(universe, int(policy['universe_races_per_sweep']), slot)
+    chunk = arb_engine.rotation(universe, int(policy['universe_races_per_sweep']), slot)
+    # Races where we hold a directional position are always rechecked so value
+    # exits ("sell high") never wait for the rotation to come back round.
+    held = {str(p['exchangeId']) for p in (data.get('latest_portfolio_review') or {}).get('positions', [])
+            if p.get('quantity')}
+    pinned = [b for b in universe if held & {l['exchange_id'] for l in b['legs']} and b not in chunk]
+    config['_universe'] = pinned + chunk
+
+
+def refresh_fair(config, data, fetch=value_engine.fetch_fair):
+    """Outside-venue fair bands for this cycle; failure disables value trades only."""
+    if value_policy(config) is None:
+        return
+    try:
+        mapping = json.loads(Path('value_map.json').read_text())
+        fair = fetch(mapping, at=now().isoformat())
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        config['_fair'] = {}
+        data['latest_fair'] = {'at': now().isoformat(), 'status': 'failed', 'reason': str(error)}
+        return
+    config['_fair'] = fair
+    data['latest_fair'] = {'at': fair['at'], 'status': 'ok', 'legs': len(fair['legs']),
+                           'kalshi_quotes': fair['kalshi_quotes'], 'poly_quotes': fair['poly_quotes']}
 
 
 def remember_auto_baskets(config, data):
@@ -157,6 +180,7 @@ def run_cycles(runner, config, remote):
     limit = int(policy['max_jobs_per_run']) if policy else 1
     results = []
     for _ in range(limit):
+        refresh_fair(config, remote.data)
         result = runner.cycle()
         results.extend(result)
         if runner.live:
@@ -177,11 +201,12 @@ def arb_summary(journal, start_rowid):
         body = json.loads(body)
         if kind == 'universe_prescreen':
             edges.append(body)
-        elif isinstance(body.get('reason'), dict) and body['reason'].get('event') in ('capital_blocked', 'arb_no_edge'):
+        elif isinstance(body.get('reason'), dict) and body['reason'].get('event') in ('capital_blocked', 'arb_no_edge', 'value_candidate'):
             blocked.append(body['reason'])
     edges.sort(key=lambda e: e['edge_per_share'], reverse=True)
     return {'at': now().isoformat(), 'universe_top_edges': edges[:10],
             'capital_blocked': [b for b in blocked if b['event'] == 'capital_blocked'][:10],
+            'value_candidates': [b for b in blocked if b['event'] == 'value_candidate'][:10],
             'universe_screened': len(edges)}
 
 
