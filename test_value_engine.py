@@ -125,3 +125,31 @@ class HaltRegressionTests(unittest.TestCase):
         result = Runner(api, journal, cfg, live=True).cycle()
         self.assertIn('completed', result[0])
         self.assertEqual(journal.pending(), [])
+
+
+class PostTradeReadTests(unittest.TestCase):
+    def test_brief_503_after_fill_does_not_halt(self):
+        # Reproduces 20 Oct 06:28 UTC: order filled, then fill reads got HTTP 503.
+        import trading_bot as T
+        calls = {'n': 0}
+        api = T.API('test-key')
+        def fake_open(req, timeout=20):
+            calls['n'] += 1
+            if calls['n'] <= 4:
+                import urllib.error
+                raise urllib.error.HTTPError(req.full_url, 503, 'busy', {}, None)
+            import io
+            class R(io.BytesIO):
+                def __enter__(self): return self
+                def __exit__(self, *a): return False
+            return R(b'{"ok": true}')
+        api.opener.open = fake_open
+        orig = T.time.sleep
+        T.time.sleep = lambda s: None
+        try:
+            self.assertEqual(api.get('/orders/1/fills?limit=100', attempts=T.POST_TRADE_READS), {'ok': True})
+            calls['n'] = 0
+            with self.assertRaises(Halt):
+                api.get('/orders/1/fills?limit=100')  # ordinary reads still give up after 3
+        finally:
+            T.time.sleep = orig

@@ -38,6 +38,9 @@ UNPROVEN_EXCHANGES = frozenset({'968', '969', '970', '963', '964', '965',
                                '1045', '1046', '878', '879', '1057', '1058'})
 
 
+POST_TRADE_READS = 10  # ~4 minutes of backoff before an accepted order halts
+
+
 class Halt(RuntimeError):
     pass
 
@@ -215,7 +218,7 @@ class API:
                 return None
         self.opener = urllib.request.build_opener(NoRedirect)
 
-    def request(self, method, path, payload=None):
+    def request(self, method, path, payload=None, attempts=None):
         if not path.startswith('/') or '://' in path:
             raise Halt('Only supported SIG /api/v1 paths permitted')
         bucket = 'GET' if method == 'GET' else 'WRITE'
@@ -223,7 +226,7 @@ class API:
         req = urllib.request.Request(BASE + path, data=data, method=method,
                                      headers={'Authorization': 'Bearer ' + self.key, 'Content-Type': 'application/json'})
         # Only reads can retry here. Writes retain their durable reconciliation path.
-        attempts = 3 if method == 'GET' else 1
+        attempts = 1 if method != 'GET' else (attempts or 3)
         for attempt in range(attempts):
             delay = max(0, self.last[bucket] + (1.2 if bucket == 'GET' else 2.2) - time.monotonic())
             if delay:
@@ -257,14 +260,18 @@ class API:
             # Never expose credentials, headers, server bodies or exception strings.
             if method == 'GET' and retryable and attempt + 1 < attempts:
                 # SIG's 429 window outlasts a 1-2s pause; back off for real.
-                time.sleep(8 * (attempt + 1) if category == 'http_429' else 2 ** attempt)
+                time.sleep(min(30, 8 * (attempt + 1)) if category in ('http_429', 'http_503')
+                           else min(30, 2 ** attempt))
                 continue
             if method == 'GET':
                 raise Halt(f'{failure}; read failed after {attempt + 1} attempt(s)') from None
             raise Halt(f'{failure}; write outcome may be unknown; reconcile before retry') from None
 
-    def get(self, path):
-        return self.request('GET', path)
+    def get(self, path, attempts=None):
+        # Subclasses (read-only reconciliation) keep the plain request signature.
+        if attempts is None:
+            return self.request('GET', path)
+        return self.request('GET', path, attempts=attempts)
 
     def book(self, exchange):
         book = self.get(f'/exchanges/{exchange}/orderbook?depth=100&tournamentId={TID}')
@@ -1054,16 +1061,16 @@ class Runner:
                 if d.get('orderId') is None:
                     continue
                 # Do not rely on displayed depth or response quantityTraded alone.
-                self.api.get(f'/orders/{d["orderId"]}/fills?limit=100')
-                order = self.api.get(f'/orders/{d["orderId"]}')
+                self.api.get(f'/orders/{d["orderId"]}/fills?limit=100', attempts=POST_TRADE_READS)
+                order = self.api.get(f'/orders/{d["orderId"]}', attempts=POST_TRADE_READS)
                 order = order.get('data', order)
                 if order['open']:
                     self.api.request('DELETE', f'/orders/{d["orderId"]}')
-                final_order = self.api.get(f'/orders/{d["orderId"]}')
+                final_order = self.api.get(f'/orders/{d["orderId"]}', attempts=POST_TRADE_READS)
                 final_order = final_order.get('data', final_order)
                 if final_order['open']:
                     raise Halt('Unfilled remainder could not be cancelled')
-                final_fills = self.api.get(f'/orders/{d["orderId"]}/fills?limit=100')
+                final_fills = self.api.get(f'/orders/{d["orderId"]}/fills?limit=100', attempts=POST_TRADE_READS)
                 if final_fills.get('coverage', {}).get('complete') is False:
                     raise Halt('Fill projection incomplete')
                 if final_fills.get('pagination', {}).get('hasMore'):

@@ -38,7 +38,7 @@ class FakeAPI:
         return {'exchangeId': i, 'asOf': {'at': now().isoformat()}, '_received_at': now().isoformat(),
                 'bids': [{'price': .52, 'quantity': 10000}], 'asks': [{'price': .53, 'quantity': 10000}]}
 
-    def get(self, path):
+    def get(self, path, attempts=None):
         if '/nodes' in path:
             i = path.split('/')[2]
             return {'contexts': [{'tournament': {'id': 'bda92870-621e-47b0-bc3c-3602c5c26f55'}}],
