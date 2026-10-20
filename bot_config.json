@@ -249,14 +249,14 @@
     "leg_buffer": "empirical",
     "redeploy_haircut": 0.5,
     "universe_races_per_sweep": 25,
-    "max_jobs_per_run": 5
+    "max_jobs_per_run": 2
   },
   "value": {
     "enabled": true,
-    "min_edge": 0.03,
+    "min_edge": 0.06,
     "exit_edge": 0.01,
     "race_cap": 3000,
-    "min_profit": 5,
+    "min_profit": 100,
     "max_fair_age_seconds": 900
   }
 }
