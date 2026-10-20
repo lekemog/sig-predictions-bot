@@ -165,7 +165,7 @@ class UniverseFake(FakeAPI):
         b['exchangeId'] = i
         return b
 
-    def get(self, path):
+    def get(self, path, attempts=None):
         if '/nodes' in path:
             i = path.split('/')[2]
             r = super().get(path.replace(f'/{i}/', '/1/' if i in ('1', '3') else '/2/'))
