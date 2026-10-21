@@ -1,4 +1,4 @@
-"""Read-only SIG maintenance: verify the legacy cent-boundary halt and checkpoint it."""
+"""Read-only SIG maintenance: verify a halted, already-filled job and checkpoint it."""
 import json
 import os
 from pathlib import Path
@@ -27,7 +27,7 @@ def reconcile_pending(api, journal, config):
     runner = Runner(api, journal, config, live=True)
     # Never enter cycle(), submit(), finish() or repair(). This routine verifies
     # closed original fills and writes only repository checkpoint metadata.
-    return [runner.reconcile_rounding_halt(job) for job in journal.pending()]
+    return [runner.reconcile_halt(job) for job in journal.pending()]
 
 
 def main():
