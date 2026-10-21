@@ -1038,10 +1038,81 @@ class Runner:
             self.journal.save(job, 'done')
         return {'reconciled': job['id'], 'dry_run': not self.live, 'orders_submitted': 0}
 
+    def reconcile_halt(self, job):
+        if (job.get('status') == 'halted' and job.get('plan', {}).get('kind') == 'value_entry'
+                and 'after' not in job):
+            return self.reconcile_value_read_halt(job)
+        return self.reconcile_rounding_halt(job)
+
+    def reconcile_value_read_halt(self, job):
+        """GET-only recovery of an accepted value entry halted during post-trade reads.
+
+        Oct 20: a single-leg value order filled in full, then SIG returned 503 on the
+        fill reads, so the job halted with no post-trade snapshot. Clear it only if the
+        order is terminal, its fills are complete and equal the requested quantity, and
+        the live account equals the pre-trade snapshot plus exactly those fills.
+        """
+        self.check_stop()
+        legs = job['request']['legs']
+        results = sorted(job.get('response', {}).get('results', []), key=lambda r: r['index'])
+        if (job['status'] != 'halted' or job.get('repairs') != [] or 'after' in job
+                or job['plan']['kind'] != 'value_entry' or len(legs) != 1 or len(results) != 1
+                or results[0]['index'] != 0 or self.config['costs']['fee_per_share'] != 0):
+            raise Halt('Unfinished repair requires reconciliation; no new orders')
+        leg, data = legs[0], results[0]['data']
+        if leg['side'] != 'no' or leg['action'] != 'buy' or leg['tournamentId'] != TID:
+            raise Halt('Unsupported recovery leg')
+        oid = data.get('orderId')
+        if (oid is None or data.get('open') is not False
+                or str(data.get('exchangeId')) != str(leg['exchangeId'])
+                or data.get('quantityTraded') != leg['quantity']):
+            raise Halt('Recovery response not a full terminal fill')
+        order = self.api.get(f'/orders/{oid}')  # plain GET: ReadOnlyAPI keeps that signature
+        order = order.get('data', order)
+        if (order.get('open') is not False or str(order.get('exchangeId')) != str(leg['exchangeId'])
+                or order.get('side') != 'no' or order.get('action') != 'buy'
+                or order.get('quantity') != leg['quantity']
+                or Decimal(str(order.get('priceLimit'))) != Decimal(str(leg['price']))):
+            raise Halt('Recovery order not verified terminal')
+        fills = self.api.get(f'/orders/{oid}/fills?limit=100')
+        if (fills.get('coverage', {}).get('complete') is not True
+                or fills.get('pagination', {}).get('hasMore') is not False
+                or str(fills.get('exchangeId')) != str(leg['exchangeId'])
+                or fills.get('tournamentId') != TID or fills.get('orderId') != oid):
+            raise Halt('Recovery fills incomplete')
+        quantities = [Decimal(str(f['quantity'])) for f in fills.get('data', [])]
+        if (not quantities or any(q >= 0 or not q.is_finite() for q in quantities)
+                or -sum(quantities) != Decimal(str(leg['quantity']))):
+            raise Halt('Recovery requires full original fills')
+        fresh = self.api.state()
+        if fresh['orders']:
+            raise Halt('Outstanding orders after execution; no further entries')
+        expected_q = dict(signed_positions(job['before']))
+        i = str(leg['exchangeId'])
+        expected_q[i] = expected_q.get(i, 0) - leg['quantity']
+        expected_q = {k: v for k, v in expected_q.items() if v}
+        if expected_q != {k: v for k, v in signed_positions(fresh).items() if v}:
+            raise Halt('Account changed since halted execution; manual reconciliation required')
+        checked = copy.deepcopy(job)
+        checked.update(fills={str(oid): fills}, after=fresh)
+        reconcile_cash(checked, self.config)  # exact fill cost, existing one-cent allowance
+        committed, race_cost, directional = portfolio_risk(fresh, self.config)
+        risk = risk_limits(self.config)
+        if (fresh['cash'] < risk['reserve'] or committed > risk['committed']
+                or any(c > risk['basket'] for c in race_cost.values()) or directional > risk['directional']):
+            raise Halt('Recovery exposure exceeds configured ceilings')
+        self.journal.event('value_read_reconciliation_verified', {'job': job['id'], 'at': fresh['at'],
+                           'dry_run': not self.live, 'orders_submitted': 0})
+        if self.live:
+            job.update(fills=checked['fills'], after=fresh, cash_change=checked['cash_change'],
+                       observed_extra_cost=checked['observed_extra_cost'])
+            self.journal.save(job, 'done')
+        return {'reconciled': job['id'], 'dry_run': not self.live, 'orders_submitted': 0}
+
     def finish(self, job):
         self.check_stop()
         if job['status'] == 'halted':
-            return self.reconcile_rounding_halt(job)
+            return self.reconcile_halt(job)
         if job['status'] == 'repairing':
             raise Halt('Unfinished repair requires reconciliation; no new orders')
         if 'response' not in job:
@@ -1216,7 +1287,7 @@ class Runner:
         pending = self.journal.pending()
         if pending:
             if not self.live:
-                return [self.reconcile_rounding_halt(job) for job in pending]
+                return [self.reconcile_halt(job) for job in pending]
             return [self.finish(job) for job in pending]
         state = self.api.state()
         self.journal.event('review', state)

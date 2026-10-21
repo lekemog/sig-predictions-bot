@@ -17,7 +17,7 @@ class ReadOnlyReconciliationTests(unittest.TestCase):
     def test_recovery_never_enters_trading_cycle_or_submission(self):
         journal=Mock();journal.pending.return_value=[{'id':'original'}]
         with patch('reconcile_only.Runner') as runner:
-            runner.return_value.reconcile_rounding_halt.return_value={'orders_submitted':0}
+            runner.return_value.reconcile_halt.return_value={'orders_submitted':0}
             self.assertEqual(reconcile_pending(Mock(),journal,{}),[{'orders_submitted':0}])
             runner.return_value.cycle.assert_not_called()
             runner.return_value.submit.assert_not_called()
