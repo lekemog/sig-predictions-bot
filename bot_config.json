@@ -257,6 +257,7 @@
     "exit_edge": 0.01,
     "race_cap": 3000,
     "min_profit": 100,
-    "max_fair_age_seconds": 900
+    "max_fair_age_seconds": 900,
+    "hold_edge": 0.02
   }
 }

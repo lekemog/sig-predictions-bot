@@ -153,3 +153,27 @@ class PostTradeReadTests(unittest.TestCase):
                 api.get('/orders/1/fills?limit=100')  # ordinary reads still give up after 3
         finally:
             T.time.sleep = orig
+
+
+class UnmarriedExitTests(unittest.TestCase):
+    # UniverseFake 33: YES bid .52 / ask .53.  We hold 100 YES.
+    def plan(self, fair, hold_edge=.02):
+        api = UniverseFake(); api.quantities['33'] = 100
+        cfg = fair_cfg({'33': dict(fair, sources=['kalshi'])}, hold_edge=hold_edge, min_profit=5)
+        return value_plan(api, api.state(), cfg, RACE)
+
+    def test_sells_when_news_moves_fair_to_the_bid(self):
+        p = self.plan({'lo': .53, 'hi': .54, 'mid': .535})   # bid .52 >= .535 - .02
+        self.assertEqual((p['kind'], p['exit_reason'], p['quantity']), ('value_exit', 'edge_gone', 100))
+
+    def test_holds_while_edge_remains(self):
+        p = self.plan({'lo': .60, 'hi': .61, 'mid': .605})   # bid .52 < .585: keep holding
+        self.assertNotEqual((p or {}).get('kind'), 'value_exit')
+
+    def test_overpriced_exit_still_labelled(self):
+        p = self.plan({'lo': .45, 'hi': .46, 'mid': .455})
+        self.assertEqual(p['exit_reason'], 'overpriced')
+
+    def test_disabled_without_hold_edge(self):
+        p = self.plan({'lo': .53, 'hi': .54, 'mid': .535}, hold_edge=None)
+        self.assertNotEqual((p or {}).get('kind'), 'value_exit')
