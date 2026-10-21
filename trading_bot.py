@@ -529,9 +529,12 @@ def value_policy(config):
         raise Halt('Invalid value policy')
     out = {'min_edge': p.get('min_edge', .03), 'exit_edge': p.get('exit_edge', .01),
            'race_cap': p.get('race_cap', 3000), 'min_profit': p.get('min_profit', 5),
-           'max_fair_age_seconds': p.get('max_fair_age_seconds', 900)}
+           'max_fair_age_seconds': p.get('max_fair_age_seconds', 900),
+           'hold_edge': p.get('hold_edge', None)}
     bounds = {'min_edge': (.01, .5), 'exit_edge': (0, .5), 'race_cap': (1, 5000),
               'min_profit': (0, 1000), 'max_fair_age_seconds': (30, 3600)}
+    if out['hold_edge'] is not None:
+        bounds['hold_edge'] = (0, .2)
     for k, (lo, hi) in bounds.items():
         v = out[k]
         if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or not lo <= v <= hi:
@@ -576,14 +579,25 @@ def value_plan(api, state, config, race, books=None, entry_observer=None):
             continue
         side = 'yes' if pos > 0 else 'no'
         _, mid, sell_value = value_engine.side_fair(f, side)
+        # Sell when SIG overpays (above the fair band), or - if hold_edge is set -
+        # as soon as holding is worth less than hold_edge/share more than the bid.
+        # Outside venues reprice on news first, so a thesis that news has broken
+        # is exited at roughly fair instead of being held to settlement.
+        floor = sell_value + policy['exit_edge']
+        reason = 'overpriced'
+        if policy['hold_edge'] is not None and mid - policy['hold_edge'] < floor:
+            floor, reason = mid - policy['hold_edge'], 'edge_gone'
         q, proceeds, worst = value_engine.sell_walk(arb_engine.ladder(books[i], side, 'sell'),
-                                                    sell_value + policy['exit_edge'],
-                                                    min(int(abs(pos)), risk['clip']))
+                                                    floor, min(int(abs(pos)), risk['clip']))
+        if q and q * worst < policy['min_profit']:
+            q = 0  # no dust sales
         gain = proceeds - q * mid
         if q and (best is None or gain > best['robust_profit']):
+            if reason == 'edge_gone' and worst >= sell_value + policy['exit_edge']:
+                reason = 'overpriced'
             best = {'kind': 'value_exit', 'name': race['name'], 'action': 'sell', 'side': side,
                     'quantity': q, 'legs': [leg], 'prices': [tick(worst)], 'robust_profit': gain,
-                    'expected_profit': gain, 'fair': f, 'race': race}
+                    'expected_profit': gain, 'fair': f, 'race': race, 'exit_reason': reason}
     if best is None:
         if config.get('entries_paused', False) is not False:
             return None
@@ -617,7 +631,8 @@ def value_plan(api, state, config, race, books=None, entry_observer=None):
         return None
     best['contracts'] = validate_contracts(api, race)
     observe({'event': 'value_candidate', 'basket': race['name'],
-             **{k: best[k] for k in ('kind', 'side', 'quantity', 'prices', 'robust_profit', 'expected_profit', 'fair')}})
+             **{k: best[k] for k in ('kind', 'side', 'quantity', 'prices', 'robust_profit', 'expected_profit', 'fair')},
+             'exit_reason': best.get('exit_reason')})
     best['objective'] = 'buy below / sell above Kalshi-Polymarket fair band; directional settlement risk'
     return best
 
