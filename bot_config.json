@@ -249,7 +249,7 @@
     "leg_buffer": "empirical",
     "redeploy_haircut": 0.5,
     "universe_races_per_sweep": 25,
-    "max_jobs_per_run": 2
+    "max_jobs_per_run": 1
   },
   "value": {
     "enabled": true,
