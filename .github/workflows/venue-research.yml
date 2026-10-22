@@ -25,9 +25,10 @@ jobs:
         run: python venue_scan.py
       - name: Preserve timestamped observations
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: venue-observations-${{ github.run_id }}
           path: venue_observations.json
-          retention-days: 3
+          retention-days: 1
           if-no-files-found: warn

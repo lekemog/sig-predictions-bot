@@ -13,7 +13,7 @@ time/page bounds. Book sampling alternates venues, up to 300 books per run.
 Incomplete discovery or book coverage is explicitly partial, never called a
 full-universe price comparison. Failures are retained in the observation file.
 
-Each run stores venue_observations.json as an Actions artifact for 21 days.
+Each run stores venue_observations.json as an Actions artifact for 1 day (upload is best-effort; a full artifact quota no longer fails the scan).
 It contains source URLs, observation times, raw catalog prices and order books.
 Quote timestamp verification remains false until schema and timing validation.
 Catalog matches are leads only. Comparison/probability outputs remain UNKNOWN
