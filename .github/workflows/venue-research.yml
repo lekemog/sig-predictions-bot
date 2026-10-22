@@ -29,5 +29,5 @@ jobs:
         with:
           name: venue-observations-${{ github.run_id }}
           path: venue_observations.json
-          retention-days: 21
+          retention-days: 3
           if-no-files-found: warn
