@@ -34,5 +34,5 @@ jobs:
         with:
           name: read-only-research-${{ github.run_id }}
           path: private/
-          retention-days: 7
+          retention-days: 3
           if-no-files-found: ignore
