@@ -1053,10 +1053,90 @@ class Runner:
             self.journal.save(job, 'done')
         return {'reconciled': job['id'], 'dry_run': not self.live, 'orders_submitted': 0}
 
+    def reconcile_exposure_halt(self, job):
+        """GET-only recovery of a fully filled basket job halted by the post-fill check.
+
+        Every fill is re-verified as closed and unchanged, the account must equal the
+        persisted post-trade snapshot exactly, and the exposure ceilings are then
+        re-checked against the fully managed basket set. A real breach still halts.
+        """
+        self.check_stop()
+        plan = job.get('plan') or {}
+        action = plan.get('action')
+        if (job.get('status') != 'halted' or job.get('repairs') != []
+                or plan.get('kind') not in ('basket_entry', 'basket_exit') or 'after' not in job
+                or action not in ('buy', 'sell') or self.config['costs']['fee_per_share'] != 0):
+            raise Halt('Unfinished repair requires reconciliation; no new orders')
+        checked = copy.deepcopy(job)
+        reconcile_cash(checked, self.config)  # raises unless fills reconcile to cash
+        legs = job['request']['legs']
+        results = sorted(job['response']['results'], key=lambda r: r['index'])
+        if [r['index'] for r in results] != list(range(len(legs))):
+            raise Halt('Incomplete recovery response')
+        ids = [str(l['exchangeId']) for l in legs]
+        if len(set(ids)) != len(ids) or len(ids) < 2:
+            raise Halt('Invalid recovery basket')
+        for result, leg in zip(results, legs):
+            if leg['side'] != 'no' or leg['action'] != action or leg['tournamentId'] != TID:
+                raise Halt('Unsupported recovery leg')
+            oid = result['data']['orderId']
+            order = self.api.get(f'/orders/{oid}')
+            order = order.get('data', order)
+            if (order.get('open') is not False or str(order.get('exchangeId')) != str(leg['exchangeId'])
+                    or order.get('side') != 'no' or order.get('action') != action
+                    or order.get('quantity') != leg['quantity']
+                    or Decimal(str(order.get('priceLimit'))) != Decimal(str(leg['price']))):
+                raise Halt('Recovery order not verified terminal')
+            fills = self.api.get(f'/orders/{oid}/fills?limit=100')
+            if (fills.get('coverage', {}).get('complete') is not True
+                    or fills.get('pagination', {}).get('hasMore') is not False
+                    or str(fills.get('exchangeId')) != str(leg['exchangeId'])
+                    or fills.get('tournamentId') != TID or fills.get('orderId') != oid
+                    or fills.get('data') != job['fills'][str(oid)]['data']):
+                raise Halt('Recovery fills incomplete or changed')
+            quantities = [Decimal(str(f['quantity'])) for f in fills['data']]
+            if (any(q >= 0 or not q.is_finite() for q in quantities)
+                    or -sum(quantities) != Decimal(str(leg['quantity']))):
+                raise Halt('Recovery requires full original fills')
+        fresh = self.api.state()
+        if (fresh['orders'] or Decimal(str(fresh['cash'])) != Decimal(str(job['after']['cash']))
+                or signed_positions(fresh) != signed_positions(job['after'])):
+            raise Halt('Account changed since halted execution; manual reconciliation required')
+        expected_q = dict(signed_positions(job['before']))
+        for leg in legs:
+            i = str(leg['exchangeId'])
+            # NO positions are negative: buying NO lowers, selling NO raises.
+            expected_q[i] = expected_q.get(i, 0) + (leg['quantity'] if action == 'sell' else -leg['quantity'])
+        expected_q = {i: q for i, q in expected_q.items() if q != 0}
+        after_q = signed_positions(fresh)
+        if expected_q != after_q:
+            raise Halt('Recovery position deltas do not match original fills')
+        for basket in self.config['baskets']:
+            if any(after_q.get(str(l['exchange_id']), 0) for l in basket['legs']):
+                validate_contracts(self.api, basket)
+        committed, race_cost, directional = portfolio_risk(fresh, self.config)
+        risk = risk_limits(self.config)
+        if (fresh['cash'] < risk['reserve'] or committed > risk['committed']
+                or any(c > risk['basket'] for c in race_cost.values()) or directional > risk['directional']):
+            raise Halt('Recovery exposure exceeds configured ceilings')
+        self.journal.event('exposure_reconciliation_verified', {'job': job['id'], 'at': fresh['at'],
+                           'dry_run': not self.live, 'orders_submitted': 0})
+        if self.live:
+            job.update(cash_change=checked['cash_change'], observed_extra_cost=checked['observed_extra_cost'])
+            self.journal.save(job, 'done')
+        return {'reconciled': job['id'], 'dry_run': not self.live, 'orders_submitted': 0}
+
     def reconcile_halt(self, job):
-        if (job.get('status') == 'halted' and job.get('plan', {}).get('kind') == 'value_entry'
+        plan = job.get('plan', {})
+        if (job.get('status') == 'halted' and plan.get('kind') == 'value_entry'
                 and 'after' not in job):
             return self.reconcile_value_read_halt(job)
+        if (job.get('status') == 'halted' and plan.get('kind') == 'basket_entry'
+                and .01 < job.get('observed_extra_cost', 0) < .010000001):
+            return self.reconcile_rounding_halt(job)
+        if (job.get('status') == 'halted' and plan.get('kind') in ('basket_entry', 'basket_exit')
+                and 'after' in job and job.get('repairs') == []):
+            return self.reconcile_exposure_halt(job)
         return self.reconcile_rounding_halt(job)
 
     def reconcile_value_read_halt(self, job):
@@ -1296,6 +1376,12 @@ class Runner:
         """Auto baskets join the managed set only once selected for execution."""
         self.config['baskets'] = [b for b in self.config['baskets']
                                   if not b.get('_prescreened') or b['name'] == keep]
+        # A selected basket is managed from now on. Clearing the flag stops a
+        # later cycle in the same run from dropping it (its held legs would
+        # then be misread as directional exposure and halt a clean fill).
+        for b in self.config['baskets']:
+            if b['name'] == keep:
+                b.pop('_prescreened', None)
 
     def cycle(self, cases=None):
         self.check_stop()
