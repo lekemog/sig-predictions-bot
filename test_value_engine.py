@@ -177,3 +177,63 @@ class UnmarriedExitTests(unittest.TestCase):
     def test_disabled_without_hold_edge(self):
         p = self.plan({'lo': .53, 'hi': .54, 'mid': .535}, hold_edge=None)
         self.assertNotEqual((p or {}).get('kind'), 'value_exit')
+
+
+class CapitalRecyclingTests(unittest.TestCase):
+    """Cash-bound value edges must be able to pull capital out of thin arbs."""
+    FAIR = {'33': {'lo': .70, 'hi': .71, 'mid': .705, 'sources': ['kalshi']}}
+
+    def test_cash_bound_value_edge_reports_capital_blocked(self):
+        api = UniverseFake(); api.cash = 2100   # 100 above reserve: below min_profit size
+        events = []
+        cfg = fair_cfg(self.FAIR, min_profit=50)
+        self.assertIsNone(value_plan(api, api.state(), cfg, RACE, entry_observer=events.append))
+        b = [e for e in events if isinstance(e, dict) and e.get('event') == 'capital_blocked']
+        self.assertEqual(len(b), 1)
+        self.assertEqual((b[0]['source'], b[0]['side']), ('value', 'yes'))
+        self.assertAlmostEqual(b[0]['roi'], (.70 - .53) / .53, places=3)
+        self.assertGreater(b[0]['shortfall'], 2000)
+
+    def test_directional_cap_is_not_reported_as_capital(self):
+        # Selling an arb frees cash, not directional room: nothing to recycle for.
+        api = UniverseFake(); api.cash = 2100
+        cfg = fair_cfg(self.FAIR, min_profit=50)
+        cfg['risk_limits']['directional'] = 3000
+        cfg['risk_limits']['factor'] = 3000
+        cfg['risk_limits']['race'] = 3000
+        state = api.state()
+        state['positions'].append({'exchangeId': '99', 'quantity': 6000, 'costBasis': 3000})
+        events = []
+        self.assertIsNone(value_plan(api, state, cfg, RACE, entry_observer=events.append))
+        self.assertFalse([e for e in events if isinstance(e, dict) and e.get('event') == 'capital_blocked'])
+
+    def test_value_block_triggers_sized_arb_exit(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        journal = Journal(str(Path(tmp.name) / 'j.sqlite')); self.addCleanup(journal.db.close)
+        api = UniverseFake()
+        api.quantities.update({'11': -5000, '22': -5000})   # held arb basket 'test'
+        api.cash = 2100
+        orig = api.book
+        # Held arb sells at .99 per matched share (< 1.0 floor): only worth it to redeploy.
+        api.book = lambda i: dict(orig(i), asks=[{'price': .505, 'quantity': 10000}]) if i in ('11', '22') else orig(i)
+        cfg = fair_cfg(self.FAIR, min_profit=50)
+        cfg['arb']['min_profit'] = 0
+        cfg['baskets'][0]['clip'] = 5000
+        cfg['_universe'] = [RACE]
+        result = Runner(api, journal, cfg, live=False).cycle()
+        plan = result[0]['plan']
+        self.assertEqual((plan['kind'], plan['exit_method']), ('basket_exit', 'opportunity_cost'))
+        # value trade needs ~2,900 SUSQies of cash: sell ~that, not all 5,000 shares
+        self.assertLess(plan['quantity'], 5000)
+        self.assertGreaterEqual(plan['quantity'] * .99, 2800)
+
+    def test_called_race_quotes_with_empty_side_are_kept(self):
+        def get(url):
+            return {'markets': [{'ticker': 'A', 'status': 'active', 'yes_bid_dollars': '0.99', 'yes_ask_dollars': '1.00'},
+                                {'ticker': 'B', 'status': 'active', 'yes_bid_dollars': '0.00', 'yes_ask_dollars': '0.01'}]}
+        q = V.kalshi_quotes(['A', 'B'], get)
+        self.assertEqual(q, {'A': (.99, 1.0), 'B': (0.0, .01)})
+        out = V.fair_table({'1': {'kalshi': 'A'}, '2': {'kalshi': 'B'}}, q, {})
+        self.assertEqual((out['1']['lo'], out['2']['hi']), (.99, .01))
+        self.assertEqual(V._quote('0', '1'), (0.0, 1.0))
+        self.assertEqual(V.fair_table({'3': {'kalshi': 'C'}}, {'C': (0.0, 1.0)}, {}), {})  # empty book: too wide
