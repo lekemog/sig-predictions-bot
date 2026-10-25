@@ -226,14 +226,3 @@ class CapitalRecyclingTests(unittest.TestCase):
         # value trade needs ~2,900 SUSQies of cash: sell ~that, not all 5,000 shares
         self.assertLess(plan['quantity'], 5000)
         self.assertGreaterEqual(plan['quantity'] * .99, 2800)
-
-    def test_called_race_quotes_with_empty_side_are_kept(self):
-        def get(url):
-            return {'markets': [{'ticker': 'A', 'status': 'active', 'yes_bid_dollars': '0.99', 'yes_ask_dollars': '1.00'},
-                                {'ticker': 'B', 'status': 'active', 'yes_bid_dollars': '0.00', 'yes_ask_dollars': '0.01'}]}
-        q = V.kalshi_quotes(['A', 'B'], get)
-        self.assertEqual(q, {'A': (.99, 1.0), 'B': (0.0, .01)})
-        out = V.fair_table({'1': {'kalshi': 'A'}, '2': {'kalshi': 'B'}}, q, {})
-        self.assertEqual((out['1']['lo'], out['2']['hi']), (.99, .01))
-        self.assertEqual(V._quote('0', '1'), (0.0, 1.0))
-        self.assertEqual(V.fair_table({'3': {'kalshi': 'C'}}, {'C': (0.0, 1.0)}, {}), {})  # empty book: too wide

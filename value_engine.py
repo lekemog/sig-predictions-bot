@@ -45,9 +45,7 @@ def _quote(bid, ask):
         bid, ask = float(bid), float(ask)
     except (TypeError, ValueError):
         return None
-    # bid 0 / ask 1 mean an empty side (e.g. a called race with no YES offers).
-    # Keep them: fair_table's max_spread still rejects anything not tight.
-    if not all(map(math.isfinite, (bid, ask))) or not (0 <= bid < ask <= 1):
+    if not (0 < bid < ask < 1) or not all(map(math.isfinite, (bid, ask))):
         return None
     return bid, ask
 
