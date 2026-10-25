@@ -441,6 +441,9 @@ def cost_allowance(config):
     return verified_fee(config) + .005  # one extra tick per leg for implementation sensitivity
 
 
+REDEPLOY_ROI_CAP = .10
+
+
 def arb_policy(config):
     """Validated probability-aware arb settings, or None for legacy behaviour."""
     p = config.get('arb')
@@ -572,7 +575,7 @@ def value_plan(api, state, config, race, books=None, entry_observer=None):
     rows = {str(p['exchangeId']): p for p in state['positions']}
     race_cost = sum(float(rows[i]['costBasis']) for i in ids if i in rows)
     committed, _, directional = portfolio_risk(state, config)
-    best = None
+    best = blocked = None
     for leg in race['legs']:
         i, f, pos = str(leg['exchange_id']), fair.get(str(leg['exchange_id'])), positions.get(str(leg['exchange_id']), 0)
         if not f or not pos:
@@ -601,26 +604,38 @@ def value_plan(api, state, config, race, books=None, entry_observer=None):
     if best is None:
         if config.get('entries_paused', False) is not False:
             return None
-        budget = min(policy['race_cap'] - race_cost, risk['directional'] - directional,
-                     risk['committed'] - committed, state['cash'] - risk['reserve'])
+        # room: caps that selling other holdings cannot lift (race cap, directional).
+        # budget additionally respects cash and committed, which an exit DOES free.
+        room = min(policy['race_cap'] - race_cost, risk['directional'] - directional)
+        budget = min(room, risk['committed'] - committed, state['cash'] - risk['reserve'])
         for leg in race['legs']:
             i = str(leg['exchange_id'])
             f, pos = fair.get(i), positions.get(i, 0)
-            if not f or budget <= 0:
+            if not f or room <= 0:
                 continue
             for side in ('yes', 'no'):
                 if pos and (pos > 0) != (side == 'yes'):
                     continue  # never net against an opposite holding
                 buy_value, mid, _ = value_engine.side_fair(f, side)
-                q, cost, worst = value_engine.buy_walk(arb_engine.ladder(books[i], side, 'buy'),
-                                                       buy_value - policy['min_edge'], budget, risk['clip'])
+                ladder = arb_engine.ladder(books[i], side, 'buy')
+                limit = buy_value - policy['min_edge']
+                q, cost, worst = value_engine.buy_walk(ladder, limit, max(budget, 0), risk['clip'])
                 if q and q * worst > budget:
                     q = int(budget // worst)
                     cost = min(cost, q * worst)
-                if not q:
-                    continue
                 robust, expected = q * buy_value - cost, q * mid - cost
-                if robust < policy['min_profit']:
+                if not q or robust < policy['min_profit']:
+                    if budget < room:
+                        # Cash/committed-bound: report the edge so a lower-ROI arb
+                        # basket can be released to fund it (opportunity-cost exit).
+                        uq, ucost, _ = value_engine.buy_walk(ladder, limit, room, risk['clip'])
+                        urobust = uq * buy_value - ucost
+                        if uq and urobust >= policy['min_profit'] and (
+                                blocked is None or urobust / ucost > blocked['roi']):
+                            blocked = {'event': 'capital_blocked', 'basket': race['name'],
+                                       'source': 'value', 'side': side, 'roi': urobust / ucost,
+                                       'quantity': uq, 'robust_profit': urobust,
+                                       'capacity': budget, 'shortfall': ucost - max(budget, 0)}
                     continue
                 if best is None or expected > best['expected_profit']:
                     best = {'kind': 'value_entry', 'name': race['name'], 'action': 'buy',
@@ -628,6 +643,8 @@ def value_plan(api, state, config, race, books=None, entry_observer=None):
                             'max_spend': q * worst, 'robust_profit': robust,
                             'expected_profit': expected, 'fair': f, 'race': race}
     if best is None:
+        if blocked is not None:
+            observe(blocked)
         return None
     best['contracts'] = validate_contracts(api, race)
     observe({'event': 'value_candidate', 'basket': race['name'],
@@ -662,6 +679,12 @@ def arb_basket_plan(api, state, config, basket, policy, entry_observer=None):
         redeploy = float(config.get('_redeploy_roi', 0) or 0)
         hold_value = arb_engine.hold_threshold(n - 1, redeploy, policy['redeploy_haircut'])
         cap = min(int(held), risk['clip'])
+        need = float(config.get('_redeploy_need', 0) or 0)
+        if redeploy > 0 and need > 0 and hold_value > 0:
+            # Release only what the blocked trade needs (10% slack, 250-share
+            # floor so the fixed charge is covered); surplus cash would only be
+            # redeployed at a lower ROI than the one that justified the discount.
+            cap = min(cap, max(250, math.ceil(1.1 * need / hold_value)))
         exit_ = arb_engine.optimal_exit([arb_engine.ladder(books[i], 'no', 'sell') for i in ids],
                                         hold_value, per_share, cap)
         if exit_ is not None and exit_['surplus'] < fixed:
@@ -715,7 +738,8 @@ def arb_basket_plan(api, state, config, basket, policy, entry_observer=None):
     if best is None:
         observe({'event': 'capital_blocked', 'basket': basket['name'],
                  'roi': unconstrained['roi'], 'quantity': unconstrained['quantity'],
-                 'robust_profit': unconstrained['robust_profit'], 'capacity': capacity})
+                 'robust_profit': unconstrained['robust_profit'], 'capacity': capacity,
+                 'shortfall': unconstrained['robust_spend'] - max(capacity, 0)})
         return None
     q = best['quantity']
     return {'kind': 'basket_entry', 'name': basket['name'], 'action': 'buy', 'quantity': q,
@@ -1400,6 +1424,7 @@ class Runner:
         if policy is not None:
             self.config['_execution_stats'] = arb_engine.execution_stats(self.journal.jobs())
             self.config['_redeploy_roi'] = 0
+            self.config['_redeploy_need'] = 0
         plans = []
         review_names = set(self.config.get('review_names', [b['name'] for b in self.config['baskets']]))
         for basket in self.config['baskets']:
@@ -1421,7 +1446,11 @@ class Runner:
             if not plans and blocked:
                 # Capital-bound: a held arb is worth releasing only if redeploying
                 # its proceeds into the best blocked arb beats holding to settlement.
-                self.config['_redeploy_roi'] = max(b['roi'] for b in blocked)
+                top = max(blocked, key=lambda b: b['roi'])
+                # Cap at 10%: a held arb is never dumped more than ~4.8% under its
+                # floor (haircut .5), however rich a single blocked edge looks.
+                self.config['_redeploy_roi'] = min(top['roi'], REDEPLOY_ROI_CAP)
+                self.config['_redeploy_need'] = top.get('shortfall', 0)
                 for basket in self.config['baskets']:
                     if any(signed_positions(state).get(str(l['exchange_id']), 0) for l in basket['legs']):
                         try:
