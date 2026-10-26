@@ -233,6 +233,43 @@ class MultiJobTests(unittest.TestCase):
         run_cycles(r, cfg, Remote()); self.assertEqual(r.calls, 1)
 
 
+class CycleBudgetTests(unittest.TestCase):
+    def test_stops_before_a_cycle_that_would_hit_the_job_timeout(self):
+        # 2026-10-26: cycles took ~6-7 min each, so the 3rd cycle was killed by the
+        # 20-minute Actions timeout mid-sweep, never recording a live sweep.
+        from hosted_runner import run_cycles
+        clock = {'t': 0.0}
+        class R:
+            live = True
+            calls = 0
+            def cycle(self):
+                self.calls += 1
+                clock['t'] += 7 * 60
+                return [{'completed': self.calls}]
+        class Remote:
+            data = {}
+        r = R()
+        run_cycles(r, arb_config(max_jobs_per_run=3), Remote(), clock=lambda: clock['t'], started=0.0)
+        self.assertEqual(r.calls, 2)
+        self.assertLess(clock['t'], 17 * 60)
+
+    def test_fast_cycles_still_use_every_job_slot(self):
+        from hosted_runner import run_cycles
+        clock = {'t': 0.0}
+        class R:
+            live = True
+            calls = 0
+            def cycle(self):
+                self.calls += 1
+                clock['t'] += 3 * 60
+                return [{'completed': self.calls}]
+        class Remote:
+            data = {}
+        r = R()
+        run_cycles(r, arb_config(max_jobs_per_run=3), Remote(), clock=lambda: clock['t'], started=0.0)
+        self.assertEqual(r.calls, 3)
+
+
 class PersistTests(unittest.TestCase):
     def test_auto_baskets_survive_checkpoint_rewrites(self):
         from hosted_runner import run_cycles
