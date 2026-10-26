@@ -677,7 +677,10 @@ def arb_basket_plan(api, state, config, basket, policy, entry_observer=None):
     if held > 0:
         rows = [p for p in state['positions'] if str(p['exchangeId']) in ids]
         redeploy = float(config.get('_redeploy_roi', 0) or 0)
-        hold_value = arb_engine.hold_threshold(n - 1, redeploy, policy['redeploy_haircut'])
+        # Below-settlement exits are authorized only by the separately gated
+        # cost_based_profit_take path when turnover.mode is live. Ordinary
+        # basket exits must retain the normal settlement floor.
+        hold_value = n - 1
         cap = min(int(held), risk['clip'])
         need = float(config.get('_redeploy_need', 0) or 0)
         if redeploy > 0 and need > 0 and hold_value > 0:
@@ -703,8 +706,7 @@ def arb_basket_plan(api, state, config, basket, policy, entry_observer=None):
                     'prices': [tick(x) for x in exit_['limits']],
                     'value_floor': q * hold_value, 'normal_settlement_floor': q * (n - 1),
                     'net_limit_proceeds': exit_['net_proceeds'], 'contracts': contracts,
-                    'robust_profit': exit_['surplus'],
-                    'exit_method': 'opportunity_cost' if redeploy > 0 else 'settlement_floor',
+                    'robust_profit': exit_['surplus'], 'exit_method': 'settlement_floor',
                     'redeploy_roi': redeploy}
     if config.get('entries_paused', False) is not False:
         observe('New entries paused for drawdown review')

@@ -127,6 +127,18 @@ class TradingTests(unittest.TestCase):
         self.assertEqual(p['quantity'], 50)
         self.assertGreaterEqual(p['net_limit_proceeds'], p['value_floor'])
 
+    def test_redeploy_does_not_lower_normal_settlement_exit_floor(self):
+        self.api.quantities = {'11': -100, '22': -100}
+        self.cfg['entries_paused'] = True
+        self.cfg['_redeploy_roi'] = .05
+        original = self.api.book
+        def below_floor(i):
+            b = original(i)
+            b['asks'] = [{'price': .505, 'quantity': 100}]
+            return b
+        self.api.book = below_floor
+        self.assertIsNone(self.plan())
+
     def test_worse_deeper_exit_prices_do_not_hide_profitable_top_depth(self):
         self.api.quantities = {'11': -100, '22': -100}
         original = self.api.book
