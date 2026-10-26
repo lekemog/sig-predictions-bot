@@ -2,7 +2,7 @@ name: SIG hourly management
 run-name: SIG sweep [${{ inputs.trigger_id || github.event_name }}]
 on:
   schedule:
-    - cron: '1,11,21,31,41,51 * * * *'
+    - cron: '17 * * * *'
   workflow_dispatch:
     inputs:
       mode:
@@ -24,7 +24,7 @@ concurrency:
 jobs:
   manage:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
