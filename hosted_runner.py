@@ -2,6 +2,7 @@
 import base64
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -12,6 +13,13 @@ from trading_bot import API, END, Halt, Journal, Runner, arb_policy, now, value_
 from research_runner import ReadOnlyAPI, collect
 from market_brain import BrainStore
 from dip_monitor import scan as scan_dips
+
+# The workflow job is killed at 20 minutes. Leave room for setup, the final
+# checkpoint and the read-only universe scan; never START a cycle (which may
+# submit an order) that is not expected to finish inside this budget.
+PROCESS_STARTED = time.monotonic()
+RUN_BUDGET_SECONDS = 17 * 60
+CYCLE_SAFETY_FACTOR = 1.25
 
 
 class RepositoryState:
@@ -169,7 +177,7 @@ def remember_auto_baskets(config, data):
     data['auto_baskets'] = list(known.values())
 
 
-def run_cycles(runner, config, remote):
+def run_cycles(runner, config, remote, clock=time.monotonic, started=None):
     """Repeat full fresh cycles while each one completes a live trade.
 
     GitHub drops most scheduled runs, so one trade per run starves the arb.
@@ -179,10 +187,20 @@ def run_cycles(runner, config, remote):
     policy = arb_policy(config)
     limit = int(policy['max_jobs_per_run']) if policy else 1
     results = []
-    for _ in range(limit):
+    started = PROCESS_STARTED if started is None else started
+    longest = 0.
+    for index in range(limit):
+        elapsed = clock() - started
+        if index and elapsed + longest * CYCLE_SAFETY_FACTOR > RUN_BUDGET_SECONDS:
+            print(json.dumps({'event': 'cycle_budget_stop', 'cycles': index,
+                              'elapsed_seconds': round(elapsed, 1),
+                              'longest_cycle_seconds': round(longest, 1)}), flush=True)
+            break
+        cycle_start = clock()
         refresh_fair(config, remote.data)
         result = runner.cycle()
         results.extend(result)
+        longest = max(longest, clock() - cycle_start)
         if runner.live:
             # Every journal save rewrites remote.data with a new dict, so always
             # write into the CURRENT object, never one captured before a trade.
