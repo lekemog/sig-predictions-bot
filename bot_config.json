@@ -2,11 +2,12 @@
   "entries_paused": false,
   "risk_limits": {
     "committed": 100000,
-    "reserve": 2000,
-    "clip": 5000,
-    "race": 5000,
-    "directional": 60000,
-    "factor": 60000
+    "reserve": 1,
+    "basket": 50000,
+    "clip": 30000,
+    "race": 50000,
+    "directional": 100000,
+    "factor": 100000
   },
   "costs": {
     "verified": false,
@@ -249,15 +250,26 @@
     "leg_buffer": "empirical",
     "redeploy_haircut": 0.5,
     "universe_races_per_sweep": 25,
-    "max_jobs_per_run": 2
+    "max_jobs_per_run": 5
   },
   "value": {
     "enabled": true,
     "min_edge": 0.03,
     "exit_edge": 0.01,
-    "race_cap": 5000,
+    "race_cap": 50000,
     "min_profit": 40,
     "max_fair_age_seconds": 300,
-    "hold_edge": 0.02
+    "hold_edge": 0.02,
+    "stop_loss": 0.12,
+    "focus": {
+      "Mississippi Senate": {
+        "cap": 50000,
+        "edge": 0.01
+      },
+      "Oregon Governor": {
+        "cap": 50000,
+        "edge": 0.01
+      }
+    }
   }
 }

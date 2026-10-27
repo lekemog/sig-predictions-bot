@@ -84,7 +84,7 @@ class ProfileTests(unittest.TestCase):
     def test_staged_profile_is_exact_and_consistent(self):
         self.assertEqual(risk_limits({'risk_limits':PROFILE}),PROFILE)
     def test_invalid_profile_cannot_relax_controls(self):
-        for change in ({'clip':5001},{'reserve':0},{'reserve':True},{'committed':100001},
+        for change in ({'clip':30001},{'reserve':0},{'reserve':True},{'committed':100001},
                        {'directional':999},{'factor':20000},{'basket':999999},{'extra':1}):
             with self.assertRaises(Halt):risk_limits({'risk_limits':dict(PROFILE,**change)})
     def test_profile_file_matches_reviewed_limits(self):

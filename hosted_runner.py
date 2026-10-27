@@ -140,7 +140,9 @@ def prepare_universe(config, data):
     # exits ("sell high") never wait for the rotation to come back round.
     held = {str(p['exchangeId']) for p in (data.get('latest_portfolio_review') or {}).get('positions', [])
             if p.get('quantity')}
-    pinned = [b for b in universe if held & {l['exchange_id'] for l in b['legs']} and b not in chunk]
+    focus = (config.get('value') or {}).get('focus') or {}
+    pinned = [b for b in universe if b not in chunk
+              and (held & {l['exchange_id'] for l in b['legs']} or b['name'] in focus)]
     config['_universe'] = pinned + chunk
 
 
