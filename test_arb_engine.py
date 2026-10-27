@@ -232,6 +232,33 @@ class MultiJobTests(unittest.TestCase):
         r = R([[{'dry_run': True}], [{'dry_run': True}]]); r.live = False
         run_cycles(r, cfg, Remote()); self.assertEqual(r.calls, 1)
 
+    def test_no_new_cycle_after_time_budget(self):
+        # Regression: a third cycle starting ~14 min into a run was killed by the
+        # 20-minute job timeout (run 40443983312). Never start one past budget.
+        from hosted_runner import run_cycles
+        class R:
+            live = True
+            def __init__(self, clock): self.clock, self.calls = clock, 0
+            def cycle(self):
+                self.calls += 1
+                self.clock[0] += 400  # each cycle takes ~6.7 minutes
+                return [{'completed': str(self.calls)}]
+        class Remote:
+            data = {}
+        cfg = arb_config(max_jobs_per_run=3)
+        clock = [0.0]
+        r = R(clock)
+        run_cycles(r, cfg, Remote(), clock=lambda: clock[0], started=0.0, budget=600)
+        self.assertEqual(r.calls, 2)
+        clock = [0.0]
+        r = R(clock)
+        run_cycles(r, cfg, Remote(), clock=lambda: clock[0], started=0.0, budget=10_000)
+        self.assertEqual(r.calls, 3)
+        clock = [5_000.0]
+        r = R(clock)  # the first cycle always runs, even late
+        run_cycles(r, cfg, Remote(), clock=lambda: clock[0], started=0.0, budget=600)
+        self.assertEqual(r.calls, 1)
+
 
 class PersistTests(unittest.TestCase):
     def test_auto_baskets_survive_checkpoint_rewrites(self):

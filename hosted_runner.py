@@ -2,6 +2,7 @@
 import base64
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -169,17 +170,32 @@ def remember_auto_baskets(config, data):
     data['auto_baskets'] = list(known.values())
 
 
-def run_cycles(runner, config, remote):
+# The workflow job is killed at 20 minutes (timeout-minutes). A full cycle has
+# taken 5-8 minutes live, so never START another cycle past this point: a
+# timeout cancellation mid-cycle can interrupt an order and skips the sweep
+# record (runs on 2026-10-26 18:24 and 2026-10-27 03:24 were cancelled this way).
+PROCESS_STARTED = time.monotonic()
+CYCLE_START_BUDGET_SECONDS = 10 * 60
+
+
+def run_cycles(runner, config, remote, clock=time.monotonic, started=None,
+               budget=CYCLE_START_BUDGET_SECONDS):
     """Repeat full fresh cycles while each one completes a live trade.
 
     GitHub drops most scheduled runs, so one trade per run starves the arb.
     Every cycle re-reads the account, re-validates contracts and rebuilds prices;
     nothing carries over except the persisted journal and remembered baskets.
+    Further cycles start only while the run is inside its time budget.
     """
     policy = arb_policy(config)
     limit = int(policy['max_jobs_per_run']) if policy else 1
+    started = PROCESS_STARTED if started is None else started
     results = []
-    for _ in range(limit):
+    for i in range(limit):
+        if i and clock() - started > budget:
+            print(json.dumps({'event': 'cycle_budget_exhausted', 'cycles_run': i,
+                              'elapsed_seconds': round(clock() - started, 1)}), flush=True)
+            break
         refresh_fair(config, remote.data)
         result = runner.cycle()
         results.extend(result)
