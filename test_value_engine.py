@@ -91,6 +91,38 @@ class PlanTests(unittest.TestCase):
         p = value_plan(api, state, fair_cfg({'44': {'lo': .80, 'hi': .81, 'mid': .805, 'sources': ['kalshi']}}), RACE)
         self.assertIsNone(p)  # 10 left under the 3000 race cap can't clear min_profit
 
+    def test_focus_buys_only_listed_races_and_ignores_min_edge(self):
+        api = UniverseFake()
+        band = {'33': {'lo': .54, 'hi': .56, 'mid': .55, 'sources': ['kalshi']}}
+        # Inside the lo-based band: normal rule abstains, focus rule pays up to mid - edge.
+        self.assertIsNone(value_plan(api, api.state(), fair_cfg(band), RACE))
+        focused = fair_cfg(band, focus={'Auto Race': {'cap': 3000, 'edge': .01}})
+        p = value_plan(api, api.state(), focused, RACE)
+        self.assertEqual((p['kind'], p['side'], p['prices']), ('value_entry', 'yes', [.53]))
+        other = fair_cfg(band, focus={'Elsewhere': {'cap': 3000, 'edge': .01}})
+        self.assertIsNone(value_plan(api, api.state(), other, RACE))
+
+    def test_focus_holds_through_edge_gone_but_stop_loss_exits(self):
+        api = UniverseFake()
+        api.quantities['33'] = 100
+        state = api.state()
+        for row in state['positions']:
+            row['avgCost'] = .60
+        # Fair mid .53 vs bid .52: hold_edge would sell, focus must keep holding.
+        band = {'33': {'lo': .52, 'hi': .54, 'mid': .53, 'sources': ['kalshi']}}
+        held = fair_cfg(band, hold_edge=.02, focus={'Auto Race': {'cap': 3000, 'edge': .01}})
+        self.assertIsNone(value_plan(api, state, held, RACE))
+        # Fair mid .53 is more than stop_loss below the .60 cost: cut the position.
+        stopped = fair_cfg(band, hold_edge=.02, stop_loss=.05, focus={'Auto Race': {'cap': 3000, 'edge': .01}})
+        p = value_plan(api, state, stopped, RACE)
+        self.assertEqual((p['kind'], p['exit_reason'], p['quantity']), ('value_exit', 'stop_loss', 100))
+
+    def test_invalid_focus_is_rejected(self):
+        api = UniverseFake()
+        for bad in ({}, {'Auto Race': {'cap': 0, 'edge': .01}}, {'Auto Race': {'cap': 5}}):
+            with self.assertRaises(Halt):
+                value_plan(api, api.state(), fair_cfg({'33': {'lo': .6, 'hi': .61, 'mid': .6, 'sources': []}}, focus=bad), RACE)
+
     def test_cycle_selects_and_dry_runs_value_trade(self):
         tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
         journal = Journal(str(Path(tmp.name) / 'j.sqlite')); self.addCleanup(journal.db.close)

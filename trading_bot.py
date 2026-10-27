@@ -178,14 +178,15 @@ def risk_limits(config):
         raise Halt('Invalid risk profile keys')
     limits = dict(legacy, **supplied)
     # Owner authorized deploying the full 100k account (18 Oct 2026).
-    ceilings = dict(committed=100000, basket=15000, clip=5000, race=5000,
-                    directional=75000, factor=75000)
+    # Owner authorized concentrating the full account in a few races (27 Oct 2026).
+    ceilings = dict(committed=100000, basket=100000, clip=30000, race=100000,
+                    directional=100000, factor=100000)
     for key, value in limits.items():
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
             raise Halt('Risk limits must be positive integers')
         if key in ceilings and value > ceilings[key]:
             raise Halt('Risk profile exceeds delegated staged ceiling')
-    if (limits['reserve'] < 1000 or limits['committed'] > 100000
+    if (limits['reserve'] < 1 or limits['committed'] > 100000
             or not limits['race'] <= limits['factor'] <= limits['directional'] <= limits['committed']
             or limits['basket'] > limits['committed']):
         raise Halt('Inconsistent risk profile')
@@ -533,11 +534,24 @@ def value_policy(config):
     out = {'min_edge': p.get('min_edge', .03), 'exit_edge': p.get('exit_edge', .01),
            'race_cap': p.get('race_cap', 3000), 'min_profit': p.get('min_profit', 5),
            'max_fair_age_seconds': p.get('max_fair_age_seconds', 900),
-           'hold_edge': p.get('hold_edge', None)}
-    bounds = {'min_edge': (.01, .5), 'exit_edge': (0, .5), 'race_cap': (1, 5000),
+           'hold_edge': p.get('hold_edge', None), 'stop_loss': p.get('stop_loss', None)}
+    bounds = {'min_edge': (.01, .5), 'exit_edge': (0, .5), 'race_cap': (1, 100000),
               'min_profit': (0, 1000), 'max_fair_age_seconds': (30, 3600)}
     if out['hold_edge'] is not None:
         bounds['hold_edge'] = (0, .2)
+    if out['stop_loss'] is not None:
+        bounds['stop_loss'] = (.02, .5)
+    out['focus'] = focus = p.get('focus')
+    if focus is not None:
+        if not isinstance(focus, dict) or not focus:
+            raise Halt('Invalid value focus')
+        for name, f in focus.items():
+            if (not isinstance(f, dict) or set(f) - {'cap', 'edge'}
+                    or isinstance(f.get('cap'), bool) or not isinstance(f.get('cap'), (int, float))
+                    or not 1 <= f['cap'] <= 100000
+                    or isinstance(f.get('edge'), bool) or not isinstance(f.get('edge'), (int, float))
+                    or not .0 <= f['edge'] <= .2):
+                raise Halt('Invalid value focus entry: ' + str(name))
     for k, (lo, hi) in bounds.items():
         v = out[k]
         if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or not lo <= v <= hi:
@@ -567,6 +581,8 @@ def value_plan(api, state, config, race, books=None, entry_observer=None):
     ids = [str(l['exchange_id']) for l in race['legs']]
     if not any(i in fair for i in ids):
         return None
+    focus = policy['focus']
+    fcfg = focus.get(race['name']) if focus else None
     if books is None or any((now() - timestamp(b['_received_at'])).total_seconds() > 60
                             for b in books.values()):
         books = fresh_books(api, race['legs'])
@@ -588,15 +604,22 @@ def value_plan(api, state, config, race, books=None, entry_observer=None):
         # is exited at roughly fair instead of being held to settlement.
         floor = sell_value + policy['exit_edge']
         reason = 'overpriced'
-        if policy['hold_edge'] is not None and mid - policy['hold_edge'] < floor:
-            floor, reason = mid - policy['hold_edge'], 'edge_gone'
+        # Focus bets are held to settlement for the full payout; only the stop
+        # below (and selling above the band) can close them early.
+        hold_edge = None if fcfg else policy['hold_edge']
+        if hold_edge is not None and mid - hold_edge < floor:
+            floor, reason = mid - hold_edge, 'edge_gone'
+        cost = float(rows[i].get('avgCost') or 0) if i in rows else 0
+        if policy['stop_loss'] is not None and cost and mid < cost - policy['stop_loss']:
+            # Outside venues have repriced against the thesis: cut at roughly fair.
+            floor, reason = max(.01, mid - .05), 'stop_loss'
         q, proceeds, worst = value_engine.sell_walk(arb_engine.ladder(books[i], side, 'sell'),
                                                     floor, min(int(abs(pos)), risk['clip']))
         if q and q * worst < policy['min_profit']:
             q = 0  # no dust sales
         gain = proceeds - q * mid
         if q and (best is None or gain > best['robust_profit']):
-            if reason == 'edge_gone' and worst >= sell_value + policy['exit_edge']:
+            if reason != 'stop_loss' and worst >= sell_value + policy['exit_edge']:
                 reason = 'overpriced'
             best = {'kind': 'value_exit', 'name': race['name'], 'action': 'sell', 'side': side,
                     'quantity': q, 'legs': [leg], 'prices': [tick(worst)], 'robust_profit': gain,
@@ -606,7 +629,10 @@ def value_plan(api, state, config, race, books=None, entry_observer=None):
             return None
         # room: caps that selling other holdings cannot lift (race cap, directional).
         # budget additionally respects cash and committed, which an exit DOES free.
-        room = min(policy['race_cap'] - race_cost, risk['directional'] - directional)
+        if focus and fcfg is None:
+            return None  # focus mode: no new directional entries outside the list
+        race_cap = fcfg['cap'] if fcfg else policy['race_cap']
+        room = min(race_cap - race_cost, risk['directional'] - directional)
         budget = min(room, risk['committed'] - committed, state['cash'] - risk['reserve'])
         for leg in race['legs']:
             i = str(leg['exchange_id'])
@@ -618,18 +644,23 @@ def value_plan(api, state, config, race, books=None, entry_observer=None):
                     continue  # never net against an opposite holding
                 buy_value, mid, _ = value_engine.side_fair(f, side)
                 ladder = arb_engine.ladder(books[i], side, 'buy')
-                limit = buy_value - policy['min_edge']
+                # Focus bets pay up to fair mid less a thin edge so large size can fill.
+                limit = mid - fcfg['edge'] if fcfg else buy_value - policy['min_edge']
                 q, cost, worst = value_engine.buy_walk(ladder, limit, max(budget, 0), risk['clip'])
                 if q and q * worst > budget:
                     q = int(budget // worst)
                     cost = min(cost, q * worst)
                 robust, expected = q * buy_value - cost, q * mid - cost
+                # Focus bets accept paying above the conservative band edge, so
+                # they are gated on the mid-based expectation instead.
+                if fcfg:
+                    robust = expected
                 if not q or robust < policy['min_profit']:
                     if budget < room:
                         # Cash/committed-bound: report the edge so a lower-ROI arb
                         # basket can be released to fund it (opportunity-cost exit).
                         uq, ucost, _ = value_engine.buy_walk(ladder, limit, room, risk['clip'])
-                        urobust = uq * buy_value - ucost
+                        urobust = uq * (mid if fcfg else buy_value) - ucost
                         if uq and urobust >= policy['min_profit'] and (
                                 blocked is None or urobust / ucost > blocked['roi']):
                             blocked = {'event': 'capital_blocked', 'basket': race['name'],
@@ -708,6 +739,10 @@ def arb_basket_plan(api, state, config, basket, policy, entry_observer=None):
                     'redeploy_roi': redeploy}
     if config.get('entries_paused', False) is not False:
         observe('New entries paused for drawdown review')
+        return None
+    value = value_policy(config)
+    if value is not None and value['focus']:
+        observe('Focus mode: capital reserved for the focus races, no new arb entries')
         return None
     needs_proof = entry_proof_required(basket) or settlement_tier != 'standard'
     reason = (defensive_entry_reason(state, config, basket, contracts)
@@ -1372,6 +1407,9 @@ class Runner:
                     if vp:
                         plans.append(vp)
                         continue  # one strategy per race per cycle
+                vpol = value_policy(self.config)
+                if vpol is not None and vpol['focus']:
+                    continue  # focus mode: no new arb baskets
                 if any(signed_positions(state).get(i, 0) for i in ids):
                     continue  # directional holding: no NO basket on top of it
                 per_share, fixed, _ = arb_charges(self.config, policy, len(ids))

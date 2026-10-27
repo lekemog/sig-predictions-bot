@@ -2,7 +2,7 @@ name: SIG hourly management
 run-name: SIG sweep [${{ inputs.trigger_id || github.event_name }}]
 on:
   schedule:
-    - cron: '17 * * * *'
+    - cron: '17,47 * * * *'
   workflow_dispatch:
     inputs:
       mode:
@@ -24,17 +24,28 @@ concurrency:
 jobs:
   manage:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
+      - name: Cutoff guard
+        id: guard
+        run: |
+          if [ "$(date -u +%s)" -ge "$(date -u -d 2026-11-04T17:00:00Z +%s)" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Trading cutoff reached; skipping to save Actions minutes."
+          fi
       - uses: actions/checkout@v6
+        if: steps.guard.outputs.skip != 'true'
       - uses: actions/setup-python@v6
+        if: steps.guard.outputs.skip != 'true'
         with:
           python-version: '3.12'
       - name: Run validation
+        if: steps.guard.outputs.skip != 'true'
         run: |
           python -m unittest discover -s tests -v
           python -m unittest discover -s . -v
       - name: Reconcile, screen and manage portfolio
+        if: steps.guard.outputs.skip != 'true'
         env:
           SIG_API_KEY: ${{ secrets.SIG_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
