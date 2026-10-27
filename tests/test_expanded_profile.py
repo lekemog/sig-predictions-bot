@@ -10,7 +10,7 @@ class ExpandedProfile(unittest.TestCase):
         self.assertEqual(r['committed'],100000)
         # Owner-approved full-account profile, 18 Oct 2026.
         self.assertEqual(r['reserve'],2000)
-        self.assertEqual((r['race'],r['directional'],r['factor']),(3000,60000,60000))
+        self.assertEqual((r['race'],r['directional'],r['factor']),(5000,60000,60000))
         self.assertEqual((r['basket'],r['clip']),(5000,5000))
         c['risk_limits']['committed']=100001
         with self.assertRaises(Halt): risk_limits(c)

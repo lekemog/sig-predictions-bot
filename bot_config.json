@@ -4,7 +4,7 @@
     "committed": 100000,
     "reserve": 2000,
     "clip": 5000,
-    "race": 3000,
+    "race": 5000,
     "directional": 60000,
     "factor": 60000
   },
@@ -253,11 +253,11 @@
   },
   "value": {
     "enabled": true,
-    "min_edge": 0.06,
+    "min_edge": 0.03,
     "exit_edge": 0.01,
-    "race_cap": 3000,
-    "min_profit": 100,
-    "max_fair_age_seconds": 900,
+    "race_cap": 5000,
+    "min_profit": 40,
+    "max_fair_age_seconds": 300,
     "hold_edge": 0.02
   }
 }
