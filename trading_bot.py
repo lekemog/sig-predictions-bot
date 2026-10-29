@@ -977,6 +977,25 @@ def reconcile_cash(job, config):
     return extra
 
 
+def exit_repair_preflight(api, config, plan):
+    """Fail closed before an exit whose full one-sided fill is unaffordable to restore.
+
+    Displayed depth can change; this is a conservative admission check, not a
+    fill guarantee. It never submits or cancels orders.
+    """
+    if plan.get('kind') != 'basket_exit':
+        return
+    quantity = int(plan['quantity'])
+    budget = min(10., float(config.get('repair_loss_budget', 10)))
+    stress = 0.
+    for leg, limit in zip(plan['legs'], plan['prices']):
+        book = api.book(str(leg['exchange_id']))
+        buyback, _ = price_for(book, 'no', 'buy', quantity)
+        stress += quantity * (max(0., buyback - float(limit)) + cost_allowance(config))
+    if stress > budget:
+        raise Halt('Exit partial-fill restoration exceeds repair budget; no orders submitted')
+
+
 class Runner:
     def __init__(self, api, journal, config, live=False):
         self.api, self.journal, self.config, self.live = api, journal, config, live
@@ -987,6 +1006,7 @@ class Runner:
 
     def submit(self, plan, state):
         self.check_stop()
+        exit_repair_preflight(self.api, self.config, plan)
         if (self.config.get('entries_paused', False) is not False
                 and not str(plan.get('kind', '')).endswith('_exit')):
             raise Halt('New entries paused for drawdown review')
