@@ -2,7 +2,7 @@
 import json
 import os
 from pathlib import Path
-from hosted_runner import DurableJournal, RepositoryState, record_sweep
+from hosted_runner import DurableJournal, RepositoryState, record_sweep, prepare_universe
 from trading_bot import API, Halt, Runner, signed_positions
 
 
@@ -44,6 +44,7 @@ def main():
         'source': 'SIG markets-and-trading documentation: no participant trading fees; '
                   'complete prior account ledger reconciled without extra fees. '
                   'Every new execution must independently reconcile fills and cash.'}
+    prepare_universe(config, remote.data)
     api = ReadOnlyAPI(os.environ.get('SIG_API_KEY'))
     api.state()
     for job in journal.pending():

@@ -219,7 +219,7 @@ class CapitalRecyclingTests(unittest.TestCase):
         self.assertIsNone(value_plan(api, state, cfg, RACE, entry_observer=events.append))
         self.assertFalse([e for e in events if isinstance(e, dict) and e.get('event') == 'capital_blocked'])
 
-    def test_value_block_triggers_sized_arb_exit(self):
+    def test_cash_recycling_does_not_override_partial_exit_repair_budget(self):
         tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
         journal = Journal(str(Path(tmp.name) / 'j.sqlite')); self.addCleanup(journal.db.close)
         api = UniverseFake()
@@ -233,8 +233,9 @@ class CapitalRecyclingTests(unittest.TestCase):
         cfg['baskets'][0]['clip'] = 5000
         cfg['_universe'] = [RACE]
         result = Runner(api, journal, cfg, live=False).cycle()
-        plan = result[0]['plan']
-        self.assertEqual((plan['kind'], plan['exit_method']), ('basket_exit', 'opportunity_cost'))
-        # value trade needs ~2,900 SUSQies of cash: sell ~that, not all 5,000 shares
-        self.assertLess(plan['quantity'], 5000)
-        self.assertGreaterEqual(plan['quantity'] * .99, 2800)
+        self.assertEqual(result[0]['decision'], 'NO_TRADE')
+        blocked = [json.loads(row[0]) for row in journal.db.execute(
+            "SELECT body FROM events WHERE kind = 'exit_blocked'")]
+        self.assertTrue(any('repair budget' in e['reason'] for e in blocked))
+        self.assertEqual(journal.pending(), [])
+

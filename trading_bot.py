@@ -942,6 +942,24 @@ def reconcile_cash(job, config):
     return extra
 
 
+def exit_repair_preflight(api, config, plan):
+    """Reject exits whose one-sided fill cannot be restored within the loss budget."""
+    if plan.get('kind') != 'basket_exit':
+        return
+    quantity = qty(plan['quantity'])
+    legs, prices = plan.get('legs'), plan.get('prices')
+    if not legs or not prices or len(legs) != len(prices):
+        raise Halt('Exit legs and prices must be complete and aligned')
+    budget = min(10., float(config.get('repair_loss_budget', 10)))
+    stress = 0.
+    for leg, limit in zip(legs, prices):
+        book = api.book(str(leg['exchange_id']))
+        buyback, _ = price_for(book, 'no', 'buy', quantity)
+        stress += quantity * (max(0., buyback - float(limit)) + cost_allowance(config))
+    if stress > budget:
+        raise Halt('Exit partial-fill restoration exceeds repair budget; no orders submitted')
+
+
 class Runner:
     def __init__(self, api, journal, config, live=False):
         self.api, self.journal, self.config, self.live = api, journal, config, live
@@ -952,6 +970,12 @@ class Runner:
 
     def submit(self, plan, state):
         self.check_stop()
+        if not str(plan.get('kind', '')).endswith('_exit'):
+            c, races, d = portfolio_risk(state, self.config)
+            r = risk_limits(self.config)
+            if (c > r['committed'] or d > r['directional']
+                    or any(v > r['basket'] for v in races.values()) or state['cash'] < r['reserve']):
+                raise Halt('Existing exposure exceeds restored caps; exits only')
         if (self.config.get('entries_paused', False) is not False
                 and not str(plan.get('kind', '')).endswith('_exit')):
             raise Halt('New entries paused for drawdown review')
@@ -997,6 +1021,7 @@ class Runner:
             if isinstance(price, bool) or not isinstance(price, (int, float)):
                 raise Halt('Execution price must be numeric')
             tick(price)  # Reject before intent is journaled, even in dry-run mode.
+        exit_repair_preflight(self.api, self.config, plan)
         expiration = min(now() + timedelta(seconds=90), END).isoformat()
         request = {'idempotencyKey': str(uuid.uuid4()), 'legs': [
             {'exchangeId': str(l['exchange_id']), 'side': plan.get('side', 'no'), 'action': plan['action'],
@@ -1152,6 +1177,15 @@ class Runner:
 
     def reconcile_halt(self, job):
         plan = job.get('plan', {})
+        if (job.get('status') in ('halted', 'exit_recovery_ready')
+                and plan.get('kind') == 'basket_exit' and 'after' not in job
+                and job.get('repairs') == []):
+            checked = self.verify_partial_exit(job)
+            self.journal.event('partial_exit_verified', {'job': job['id'],
+                               'at': checked['after']['at'], 'orders_submitted': 0})
+            if self.live:
+                self.journal.save(job, 'exit_recovery_ready')
+            return {'verified': job['id'], 'recovery_ready': True, 'orders_submitted': 0}
         if (job.get('status') == 'halted' and plan.get('kind') == 'value_entry'
                 and 'after' not in job):
             return self.reconcile_value_read_halt(job)
@@ -1162,6 +1196,158 @@ class Runner:
                 and 'after' in job and job.get('repairs') == []):
             return self.reconcile_exposure_halt(job)
         return self.reconcile_rounding_halt(job)
+
+    def verify_partial_exit(self, job):
+        """GET-only proof of terminal partial exit, cash and every position delta."""
+        self.check_stop()
+        legs = job.get('request', {}).get('legs', [])
+        results = sorted(job.get('response', {}).get('results', []), key=lambda r: r['index'])
+        plan = job.get('plan', {})
+        ids = [str(l['exchangeId']) for l in legs]
+        if (job.get('status') not in ('halted', 'exit_recovery_ready')
+                or job.get('repairs') != [] or 'after' in job
+                or plan.get('kind') != 'basket_exit' or plan.get('action') != 'sell'
+                or len(legs) != 2 or len(set(ids)) != 2
+                or [r['index'] for r in results] != [0, 1]
+                or ids != [str(l['exchange_id']) for l in plan['legs']]
+                or self.config['costs']['fee_per_share'] != 0):
+            raise Halt('Partial exit is not eligible for bounded completion')
+        before_q = signed_positions(job['before'])
+        if len({before_q.get(i, 0) for i in ids}) != 1 or before_q.get(ids[0], 0) >= 0:
+            raise Halt('Original exit did not start from a matched NO hedge')
+        expected = dict(before_q)
+        checked = copy.deepcopy(job)
+        filled = []
+        for leg, result in zip(legs, results):
+            if (leg['side'] != 'no' or leg['action'] != 'sell' or leg['tournamentId'] != TID
+                    or leg['quantity'] != plan['quantity']
+                    or leg['quantity'] > -before_q[leg['exchangeId']]):
+                raise Halt('Unsupported partial exit leg')
+            oid = result['data']['orderId']
+            order = self.api.get(f'/orders/{oid}')
+            order = order.get('data', order)
+            if (order.get('open') is not False or str(order.get('exchangeId')) != str(leg['exchangeId'])
+                    or order.get('side') != 'no' or order.get('action') != 'sell'
+                    or order.get('quantity') != leg['quantity']
+                    or Decimal(str(order.get('priceLimit'))) != Decimal(str(leg['price']))):
+                raise Halt('Partial exit order is not verified terminal')
+            fills = self.api.get(f'/orders/{oid}/fills?limit=100')
+            if (fills.get('coverage', {}).get('complete') is not True
+                    or fills.get('pagination', {}).get('hasMore') is not False
+                    or str(fills.get('exchangeId')) != str(leg['exchangeId'])
+                    or fills.get('tournamentId') != TID or fills.get('orderId') != oid
+                    or fills.get('data') != job.get('fills', {}).get(str(oid), {}).get('data')):
+                raise Halt('Partial exit fills incomplete or changed')
+            amounts = [Decimal(str(f['quantity'])) for f in fills['data']]
+            if any(not q.is_finite() or q >= 0 or q != q.to_integral_value() for q in amounts):
+                raise Halt('Invalid partial exit fill quantity')
+            total = -sum(amounts, Decimal(0))
+            if not 0 <= total <= leg['quantity']:
+                raise Halt('Partial exit overfilled')
+            if any(Decimal(str(f['price'])) < Decimal(str(leg['price'])) for f in fills['data']):
+                raise Halt('Partial exit fill breached original limit')
+            filled.append(int(total))
+            expected[str(leg['exchangeId'])] += int(total)
+            checked['fills'][str(oid)] = fills
+        if max(filled) != plan['quantity'] or min(filled) == max(filled):
+            raise Halt('Recovery requires exactly one fully filled exit leg')
+        fresh = self.api.state()
+        if fresh['orders'] or {i: q for i, q in expected.items() if q} != signed_positions(fresh):
+            raise Halt('Account changed since partial exit; no recovery orders')
+        checked['after'] = fresh
+        reconcile_cash(checked, self.config)
+        validate_contracts(self.api, {'name': plan['name'], 'legs': plan['legs']})
+        return checked
+
+    def complete_partial_exit(self, job):
+        """Finish only the unfilled original leg, at its original limit or better."""
+        if not self.live:
+            raise Halt('Exit completion requires the live executor')
+        checked = self.verify_partial_exit(job)
+        after = copy.deepcopy(checked['after'])
+        ids = [str(l['exchangeId']) for l in job['request']['legs']]
+        held = [-signed_positions(after).get(i, 0) for i in ids]
+        index = held.index(max(held))
+        q = qty(int(max(held) - min(held)))
+        leg = job['request']['legs'][index]
+        if q > risk_limits(self.config)['clip']:
+            raise Halt('Recovery exceeds restored execution clip')
+        price, _ = price_for(self.api.book(ids[index]), 'no', 'sell', q)
+        if Decimal(str(price)) < Decimal(str(leg['price'])):
+            raise Halt('Recovery sell depth below original exit limit; waiting')
+        # Never replay the old multi-leg request or buy back the filled side.
+        request = dict(leg, quantity=q, price=leg['price'],
+                       expirationDate=min(now() + timedelta(seconds=60), END).isoformat(),
+                       idempotencyKey=str(uuid.uuid4()))
+        repair = {'request': request, 'method': 'complete_original_exit'}
+        job['repairs'].append(repair)
+        self.journal.save(job, 'repairing')
+        self.check_stop()
+        try:
+            repair['response'] = self.api.request('POST', '/orders', request)
+            self.journal.save(job, 'repairing')
+            oid = repair['response'].get('orderId')
+            if oid is None:
+                raise Halt('Exit completion produced no order')
+            order = self.api.get(f'/orders/{oid}')
+            if order.get('data', order)['open']:
+                self.api.request('DELETE', f'/orders/{oid}')
+            order = self.api.get(f'/orders/{oid}')
+            if order.get('data', order)['open']:
+                raise Halt('Exit completion remainder is still open')
+            repair['fills'] = self.api.get(f'/orders/{oid}/fills?limit=100')
+            projection = repair['fills']
+            if (projection.get('coverage', {}).get('complete') is not True
+                    or projection.get('pagination', {}).get('hasMore') is not False
+                    or projection.get('orderId') != oid
+                    or str(projection.get('exchangeId')) != ids[index]
+                    or projection.get('tournamentId') != TID):
+                raise Halt('Exit completion fills incomplete')
+            amounts = [Decimal(str(f['quantity'])) for f in projection['data']]
+            if (any(not v.is_finite() or v >= 0 for v in amounts)
+                    or -sum(amounts, Decimal(0)) != q
+                    or any(Decimal(str(f['price'])) < Decimal(str(request['price']))
+                           for f in projection['data'])):
+                raise Halt('Exit completion did not fill exactly within original limit')
+            fresh = self.api.state()
+            expected = dict(signed_positions(after))
+            expected[ids[index]] += q
+            if fresh['orders'] or {i: v for i, v in expected.items() if v} != signed_positions(fresh):
+                raise Halt('Exit completion position mismatch')
+            job['after'] = fresh
+            reconcile_cash(job, self.config)
+            # Completing a sell can reduce inherited exposure above rolled-back
+            # caps; it must never increase that exposure or unlock new entries.
+            self.check_post_fill_risk(job)
+            self.journal.event('partial_exit_completed', {'job': job['id'], 'quantity': q,
+                               'exchange_id': ids[index], 'cash': fresh['cash']})
+            self.journal.save(job, 'done')
+            return {'completed': job['id'], 'cash': fresh['cash'], 'repairs': 1}
+        except Exception:
+            self.journal.save(job, 'halted')
+            raise
+
+    def check_post_fill_risk(self, job):
+        after, risk = job['after'], risk_limits(self.config)
+        committed, races, directional = portfolio_risk(after, self.config)
+        if (after['cash'] >= risk['reserve'] and committed <= risk['committed']
+                and all(c <= risk['basket'] for c in races.values())
+                and directional <= risk['directional']):
+            return
+        before = job['before']
+        bq, aq = signed_positions(before), signed_positions(after)
+        reducing = (job['plan'].get('action') == 'sell'
+                    and all(q == 0 or (bq.get(i, 0) * q > 0 and abs(q) <= abs(bq[i]))
+                            for i, q in aq.items()))
+        bc, br, bd = portfolio_risk(before, self.config)
+        if (not reducing or committed > max(risk['committed'], bc) + .01
+                or directional > max(risk['directional'], bd) + .01
+                or any(c > max(risk['basket'], br.get(i, 0)) + .01 for i, c in races.items())
+                or after['cash'] < min(risk['reserve'], before['cash'])):
+            raise Halt('Post-fill exposure exceeds configured ceilings')
+        self.journal.event('inherited_exposure_reducing_exit',
+                           {'job': job['id'], 'directional': directional,
+                            'directional_limit': risk['directional']})
 
     def reconcile_value_read_halt(self, job):
         """GET-only recovery of an accepted value entry halted during post-trade reads.
@@ -1230,6 +1416,8 @@ class Runner:
 
     def finish(self, job):
         self.check_stop()
+        if job['status'] == 'exit_recovery_ready':
+            return self.complete_partial_exit(job)
         if job['status'] == 'halted':
             return self.reconcile_halt(job)
         if job['status'] == 'repairing':
@@ -1273,13 +1461,7 @@ class Runner:
                 after = self.repair(job, after)
             job['after'] = after
             reconcile_cash(job, self.config)
-            risk = risk_limits(self.config)
-            if after['cash'] < risk['reserve']:
-                raise Halt('Cash reserve breached after fills')
-            committed, race_cost, directional = portfolio_risk(after, self.config)
-            if (committed > risk['committed'] or any(c > risk['basket'] for c in race_cost.values())
-                    or directional > risk['directional']):
-                raise Halt('Post-fill exposure exceeds configured ceilings')
+            self.check_post_fill_risk(job)
             self.journal.save(job, 'done')
             return {'completed': job['id'], 'cash': after['cash'], 'cash_change': job['cash_change'],
                     'repairs': len(job['repairs'])}
@@ -1463,6 +1645,26 @@ class Runner:
             plan = directional_plan(self.api, state, self.config, case)
             if plan:
                 plans.append(plan)
+        # Inherited positions can exceed newly restored caps. Continue reviewing
+        # exits while refusing any additional entries until back inside limits.
+        committed, races, directional = portfolio_risk(state, self.config)
+        risk = risk_limits(self.config)
+        entries_blocked = (committed > risk['committed'] or directional > risk['directional']
+                           or any(c > risk['basket'] for c in races.values())
+                           or state['cash'] < risk['reserve'])
+        admitted = []
+        for plan in plans:
+            if entries_blocked and not str(plan['kind']).endswith('_exit'):
+                self.journal.event('entry_blocked', {'basket': plan['name'],
+                                   'reason': 'Existing exposure exceeds restored caps'})
+                continue
+            try:
+                exit_repair_preflight(self.api, self.config, plan)
+            except Halt as e:
+                self.journal.event('exit_blocked', {'basket': plan['name'], 'reason': str(e)})
+                continue
+            admitted.append(plan)
+        plans = admitted
         # One job per cycle; always obtain a fresh state and prices on the next cycle.
         plans.sort(key=lambda p: (str(p['kind']).endswith('_exit'), p.get('robust_profit', p.get('conservative_limit_edge', 0))), reverse=True)
         if not plans:
@@ -1522,3 +1724,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
