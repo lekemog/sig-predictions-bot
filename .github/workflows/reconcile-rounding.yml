@@ -1,6 +1,11 @@
 name: Read-only rounding reconciliation
 on:
   workflow_dispatch:
+    inputs:
+      complete_partial_exit:
+        description: Authorize the live executor to finish the verified unfilled exit leg at its original limit or better
+        type: boolean
+        default: false
 permissions:
   contents: write
 concurrency:
@@ -21,4 +26,6 @@ jobs:
         env:
           SIG_API_KEY: ${{ secrets.SIG_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
+          SIG_AUTHORIZE_EXIT_RECOVERY: ${{ inputs.complete_partial_exit }}
         run: python reconcile_only.py
+

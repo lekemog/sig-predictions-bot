@@ -25,6 +25,7 @@ def fixture():
            'plan': plan, 'request': {'legs': legs}, 'fills': fills,
            'response': {'results': [{'index': n-1, 'data': {'orderId': n}} for n in (1, 2)]}}
     cfg = {'baskets': [{'name': 'test', 'legs': plan['legs']}],
+           '_authorize_partial_exit_completion': True,
            'kill_switch': '/nonexistent-stop',
            'costs': {'fee_per_share': 0, 'verified': True, 'source': 'test fee schedule'},
            'risk_limits': {'committed': 100000, 'reserve': 1000, 'clip': 5000,
@@ -54,6 +55,15 @@ class PartialExitTests(unittest.TestCase):
         self.assertTrue(r['recovery_ready'])
         self.assertEqual(j['status'], 'exit_recovery_ready')
         self.assertEqual(len(self.journal.pending()), 1)
+        api.request.assert_not_called()
+
+    def test_scheduled_management_cannot_authorize_recovery_itself(self):
+        j, c, api, _ = fixture()
+        c.pop('_authorize_partial_exit_completion')
+        self.journal.save(j, 'halted')
+        result = Runner(api, self.journal, c, live=True).reconcile_halt(j)
+        self.assertFalse(result['recovery_ready'])
+        self.assertEqual(j['status'], 'halted')
         api.request.assert_not_called()
 
     def test_changed_cash_positions_fills_open_orders_or_live_order_blocks(self):

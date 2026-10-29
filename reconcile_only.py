@@ -45,6 +45,10 @@ def main():
                   'complete prior account ledger reconciled without extra fees. '
                   'Every new execution must independently reconcile fills and cash.'}
     prepare_universe(config, remote.data)
+    # Arming this bounded sell requires the owner to submit the manual workflow.
+    # Scheduled management never sets this flag or authorizes itself.
+    config['_authorize_partial_exit_completion'] = (
+        os.environ.get('SIG_AUTHORIZE_EXIT_RECOVERY') == 'true')
     api = ReadOnlyAPI(os.environ.get('SIG_API_KEY'))
     api.state()
     for job in journal.pending():

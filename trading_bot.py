@@ -1183,9 +1183,12 @@ class Runner:
             checked = self.verify_partial_exit(job)
             self.journal.event('partial_exit_verified', {'job': job['id'],
                                'at': checked['after']['at'], 'orders_submitted': 0})
-            if self.live:
+            armed = self.config.get('_authorize_partial_exit_completion') is True
+            if self.live and armed:
+                job['recovery_authorization'] = {'source': 'manual_recovery_workflow',
+                                                  'at': now().isoformat()}
                 self.journal.save(job, 'exit_recovery_ready')
-            return {'verified': job['id'], 'recovery_ready': True, 'orders_submitted': 0}
+            return {'verified': job['id'], 'recovery_ready': armed, 'orders_submitted': 0}
         if (job.get('status') == 'halted' and plan.get('kind') == 'value_entry'
                 and 'after' not in job):
             return self.reconcile_value_read_halt(job)
@@ -1263,6 +1266,8 @@ class Runner:
         """Finish only the unfilled original leg, at its original limit or better."""
         if not self.live:
             raise Halt('Exit completion requires the live executor')
+        if job.get('recovery_authorization', {}).get('source') != 'manual_recovery_workflow':
+            raise Halt('Partial exit completion requires manual workflow authorization')
         checked = self.verify_partial_exit(job)
         after = copy.deepcopy(checked['after'])
         ids = [str(l['exchangeId']) for l in job['request']['legs']]
