@@ -44,7 +44,23 @@ def main():
         'source': 'SIG markets-and-trading documentation: no participant trading fees; '
                   'complete prior account ledger reconciled without extra fees. '
                   'Every new execution must independently reconcile fills and cash.'}
-    results = reconcile_pending(ReadOnlyAPI(os.environ.get('SIG_API_KEY')), journal, config)
+    api = ReadOnlyAPI(os.environ.get('SIG_API_KEY'))
+    api.state()
+    for job in journal.pending():
+        for result in job.get('response', {}).get('results', []):
+            oid = result.get('data', {}).get('orderId')
+            if oid is None:
+                continue
+            order = api.get(f'/orders/{oid}')
+            order = order.get('data', order)
+            fills = api.get(f'/orders/{oid}/fills?limit=100')
+            print(json.dumps({'event': 'readonly_order_evidence', 'order_id': oid,
+                              'order': {k: order.get(k) for k in
+                                        ('open', 'exchangeId', 'side', 'action', 'quantity',
+                                         'quantityTraded', 'priceLimit')},
+                              'fills': fills.get('data'), 'coverage': fills.get('coverage'),
+                              'pagination': fills.get('pagination')}), flush=True)
+    results = reconcile_pending(api, journal, config)
     # A reconciliation receipt is never a successful live sweep.
     record_sweep(remote, 'reconcile-only', 'incomplete', 0)
     journal.event('readonly_checkpoint_recovery', results)
@@ -54,3 +70,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
