@@ -86,6 +86,66 @@ class FakeAPI:
         return response
 
 
+
+class InheritedMatchedEntryTests(unittest.TestCase):
+    """The existing directional overage cannot silently disable small matched arbs."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.journal = Journal(str(Path(self.tmp.name) / 'journal.sqlite'))
+        self.addCleanup(self.journal.db.close)
+        self.api, self.cfg = FakeAPI(), config()
+        self.cfg['arb'] = {'enabled': True, 'min_edge_per_share': .005,
+                           'min_profit': 1, 'p_double_yes': .002, 'leg_buffer': 0}
+        self.cfg['risk_limits'] = {'committed': 100000, 'reserve': 2000, 'clip': 5000,
+                                   'race': 5000, 'directional': 60000, 'factor': 60000}
+        self.cfg['baskets'][0]['clip'] = 1000
+        self.api.quantities['99'] = 178800  # $87,612 unrelated directional holding
+        self.api.cash = 6263.91
+
+    def test_small_matched_entry_while_directional_overcap(self):
+        from trading_bot import inherited_matched_entry_allowed
+        state = self.api.state()
+        p = basket_plan(self.api, state, self.cfg, self.cfg['baskets'][0])
+        self.assertEqual((p['kind'], p['quantity']), ('basket_entry', 100))
+        self.assertTrue(inherited_matched_entry_allowed(state, self.cfg, p))
+        result = Runner(self.api, self.journal, self.cfg, live=False).cycle()
+        self.assertTrue(result[0]['dry_run'])
+        self.assertEqual(result[0]['plan']['quantity'], 100)
+
+    def test_rejects_directional_or_oversize_entry(self):
+        from trading_bot import inherited_matched_entry_allowed
+        state = self.api.state()
+        p = basket_plan(self.api, state, self.cfg, self.cfg['baskets'][0])
+        self.assertFalse(inherited_matched_entry_allowed(state, self.cfg, dict(p, quantity=101)))
+        self.assertFalse(inherited_matched_entry_allowed(state, self.cfg, dict(p, kind='value_entry')))
+        self.assertFalse(inherited_matched_entry_allowed(state, self.cfg, dict(p, settlement_tier='unproven')))
+
+    def test_no_trades_if_committed_cap_exceeded(self):
+        self.api.quantities['99'] = 206000
+        result = Runner(self.api, self.journal, self.cfg, live=False).cycle()
+        self.assertEqual(result[0]['decision'], 'NO_TRADE')
+
+    def test_preflight_rejects_unwind_without_depth(self):
+        from trading_bot import inherited_entry_repair_preflight
+        p = basket_plan(self.api, self.api.state(), self.cfg, self.cfg['baskets'][0])
+        old = self.api.book
+        self.api.book = lambda i: dict(old(i), asks=[])
+        with self.assertRaises(Halt):
+            inherited_entry_repair_preflight(self.api, self.cfg, p)
+
+    def test_matched_fill_may_keep_inherited_directional_unchanged(self):
+        before = self.api.state()
+        after = copy.deepcopy(before)
+        after['positions'] += [{'exchangeId': '11', 'quantity': -100, 'costBasis': 48},
+                               {'exchangeId': '22', 'quantity': -100, 'costBasis': 48}]
+        after['cash'] -= 96
+        from trading_bot import arb_basket_plan, arb_policy
+        plan = basket_plan(self.api, before, self.cfg, self.cfg['baskets'][0])
+        Runner(self.api, self.journal, self.cfg, live=False).check_post_fill_risk(
+            {'id': 't', 'before': before, 'after': after, 'plan': plan, 'repairs': []})
+
 class TradingTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

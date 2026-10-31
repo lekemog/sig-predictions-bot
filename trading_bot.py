@@ -719,6 +719,9 @@ def arb_basket_plan(api, state, config, basket, policy, entry_observer=None):
     payout = arb_engine.expected_payout(n, policy['p_double_yes'])
     ladders = [arb_engine.ladder(books[i], 'no', 'buy') for i in ids]
     max_q = min(qty(basket.get('clip', 100)), risk['clip'])
+    if directional > risk['directional']:
+        # Small matched hedges may not increase an inherited directional breach.
+        max_q = min(max_q, 100)
 
     def size(limit_q):
         return arb_engine.optimal_entry(ladders, payout, per_share, fixed, limit_q,
@@ -960,6 +963,56 @@ def exit_repair_preflight(api, config, plan):
         raise Halt('Exit partial-fill restoration exceeds repair budget; no orders submitted')
 
 
+
+def inherited_matched_entry_allowed(state, config, plan):
+    """Bounded, two-leg matched entry despite *inherited* directional overage.
+
+    The position must be flat on both legs. This permission never applies to
+    directional/value entries or relaxes committed, cash, or per-basket caps.
+    A failed leg is still subject to the existing fail-closed repair journal.
+    """
+    if (not isinstance(plan, dict) or plan.get('kind') != 'basket_entry'
+            or plan.get('action') != 'buy' or plan.get('side', 'no') != 'no'
+            or plan.get('settlement_tier') != 'standard'
+            or isinstance(plan.get('quantity'), bool)
+            or not isinstance(plan.get('quantity'), int)
+            or not 0 < plan['quantity'] <= 100
+            or len(plan.get('legs', [])) != 2):
+        return False
+    ids = [str(l['exchange_id']) for l in plan['legs']]
+    if len(set(ids)) != 2 or any(signed_positions(state).get(i, 0) for i in ids):
+        return False
+    matching = [b for b in config['baskets'] if b['name'] == plan.get('name')
+                and b['legs'] == plan['legs']]
+    if len(matching) != 1:
+        return False
+    committed, races, directional = portfolio_risk(state, config)
+    risk = risk_limits(config)
+    spend = plan.get('max_spend')
+    if isinstance(spend, bool) or not isinstance(spend, (int, float)) or not math.isfinite(spend) or spend <= 0:
+        return False
+    return (directional > risk['directional']
+            and committed + spend <= risk['committed'] + 1e-8
+            and all(v <= risk['basket'] + 1e-8 for v in races.values())
+            and races.get(plan['name'], 0) + spend <= risk['basket'] + 1e-8
+            and state['cash'] - spend >= risk['reserve'])
+
+
+def inherited_entry_repair_preflight(api, config, plan):
+    """Require currently executable emergency sale of EITHER entry leg.
+
+    This is a liquidity snapshot, not a fill guarantee. Loss bound and 100-share
+    cap limit but cannot eliminate partial-fill execution risk.
+    """
+    q = plan['quantity']
+    loss = 0.
+    for leg, limit in zip(plan['legs'], plan['prices']):
+        book = api.book(str(leg['exchange_id']))
+        price, _ = price_for(book, 'no', 'sell', q)
+        loss += q * (max(0., float(limit) - price) + cost_allowance(config))
+    if loss > min(10., float(config.get('repair_loss_budget', 10))) + 1e-8:
+        raise Halt('Inherited-risk basket repair exceeds $10 budget; no new orders')
+
 class Runner:
     def __init__(self, api, journal, config, live=False):
         self.api, self.journal, self.config, self.live = api, journal, config, live
@@ -973,9 +1026,12 @@ class Runner:
         if not str(plan.get('kind', '')).endswith('_exit'):
             c, races, d = portfolio_risk(state, self.config)
             r = risk_limits(self.config)
-            if (c > r['committed'] or d > r['directional']
+            inherited_hedge = inherited_matched_entry_allowed(state, self.config, plan)
+            if (c > r['committed'] or (d > r['directional'] and not inherited_hedge)
                     or any(v > r['basket'] for v in races.values()) or state['cash'] < r['reserve']):
                 raise Halt('Existing exposure exceeds restored caps; exits only')
+            if inherited_hedge:
+                inherited_entry_repair_preflight(self.api, self.config, plan)
         if (self.config.get('entries_paused', False) is not False
                 and not str(plan.get('kind', '')).endswith('_exit')):
             raise Halt('New entries paused for drawdown review')
@@ -1340,6 +1396,16 @@ class Runner:
                 and directional <= risk['directional']):
             return
         before = job['before']
+        if inherited_matched_entry_allowed(before, self.config, job['plan']):
+            bc, br, bd = portfolio_risk(before, self.config)
+            if (after['cash'] >= risk['reserve']
+                    and committed <= risk['committed'] + 1e-8
+                    and directional <= bd + .01
+                    and all(c <= risk['basket'] + 1e-8 for c in races.values())):
+                self.journal.event('inherited_matched_entry_reconciled',
+                                   {'job': job['id'], 'directional_before': bd,
+                                    'directional_after': directional})
+                return
         bq, aq = signed_positions(before), signed_positions(after)
         reducing = (job['plan'].get('action') == 'sell'
                     and all(q == 0 or (bq.get(i, 0) * q > 0 and abs(q) <= abs(bq[i]))
@@ -1659,7 +1725,8 @@ class Runner:
                            or state['cash'] < risk['reserve'])
         admitted = []
         for plan in plans:
-            if entries_blocked and not str(plan['kind']).endswith('_exit'):
+            if (entries_blocked and not str(plan['kind']).endswith('_exit')
+                    and not inherited_matched_entry_allowed(state, self.config, plan)):
                 self.journal.event('entry_blocked', {'basket': plan['name'],
                                    'reason': 'Existing exposure exceeds restored caps'})
                 continue
