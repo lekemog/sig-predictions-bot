@@ -255,7 +255,7 @@
     "enabled": true,
     "min_edge": 0.03,
     "exit_edge": 0.01,
-    "race_cap": 5000,
+    "race_cap": 3000,
     "min_profit": 40,
     "max_fair_age_seconds": 300,
     "hold_edge": 0.02
