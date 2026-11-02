@@ -243,7 +243,7 @@
   },
   "arb": {
     "enabled": true,
-    "min_edge_per_share": 0.002,
+    "min_edge_per_share": 0.004,
     "min_profit": 1,
     "p_double_yes": 0.002,
     "leg_buffer": "empirical",
@@ -253,11 +253,13 @@
   },
   "value": {
     "enabled": true,
-    "min_edge": 0.03,
+    "min_edge": 0.05,
     "exit_edge": 0.01,
     "race_cap": 3000,
     "min_profit": 40,
     "max_fair_age_seconds": 300,
-    "hold_edge": 0.02
-  }
+    "hold_edge": 0.02,
+    "stop_loss": 0.1
+  },
+  "entry_blackout_hours": 12
 }
