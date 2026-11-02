@@ -533,11 +533,13 @@ def value_policy(config):
     out = {'min_edge': p.get('min_edge', .03), 'exit_edge': p.get('exit_edge', .01),
            'race_cap': p.get('race_cap', 3000), 'min_profit': p.get('min_profit', 5),
            'max_fair_age_seconds': p.get('max_fair_age_seconds', 900),
-           'hold_edge': p.get('hold_edge', None)}
+           'hold_edge': p.get('hold_edge', None), 'stop_loss': p.get('stop_loss', None)}
     bounds = {'min_edge': (.01, .5), 'exit_edge': (0, .5), 'race_cap': (1, 5000),
               'min_profit': (0, 1000), 'max_fair_age_seconds': (30, 3600)}
     if out['hold_edge'] is not None:
         bounds['hold_edge'] = (0, .2)
+    if out['stop_loss'] is not None:
+        bounds['stop_loss'] = (.02, .5)
     for k, (lo, hi) in bounds.items():
         v = out[k]
         if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or not lo <= v <= hi:
@@ -590,13 +592,17 @@ def value_plan(api, state, config, race, books=None, entry_observer=None):
         reason = 'overpriced'
         if policy['hold_edge'] is not None and mid - policy['hold_edge'] < floor:
             floor, reason = mid - policy['hold_edge'], 'edge_gone'
+        cost = float(rows[i].get('avgCost') or 0) if i in rows else 0
+        if policy['stop_loss'] is not None and cost and mid < cost - policy['stop_loss']:
+            # Outside venues repriced hard against the thesis: cut near fair.
+            floor, reason = max(.01, mid - .05), 'stop_loss'
         q, proceeds, worst = value_engine.sell_walk(arb_engine.ladder(books[i], side, 'sell'),
                                                     floor, min(int(abs(pos)), risk['clip']))
         if q and q * worst < policy['min_profit']:
             q = 0  # no dust sales
         gain = proceeds - q * mid
         if q and (best is None or gain > best['robust_profit']):
-            if reason == 'edge_gone' and worst >= sell_value + policy['exit_edge']:
+            if reason != 'stop_loss' and worst >= sell_value + policy['exit_edge']:
                 reason = 'overpriced'
             best = {'kind': 'value_exit', 'name': race['name'], 'action': 'sell', 'side': side,
                     'quantity': q, 'legs': [leg], 'prices': [tick(worst)], 'robust_profit': gain,
@@ -1724,7 +1730,13 @@ class Runner:
                            or any(c > risk['basket'] for c in races.values())
                            or state['cash'] < risk['reserve'])
         admitted = []
+        blackout = float(self.config.get('entry_blackout_hours', 0) or 0)
+        late = blackout > 0 and now() >= END - timedelta(hours=blackout)
         for plan in plans:
+            if late and not str(plan['kind']).endswith('_exit'):
+                self.journal.event('entry_blocked', {'basket': plan['name'],
+                                   'reason': 'Final-hours entry blackout: exits only'})
+                continue
             if (entries_blocked and not str(plan['kind']).endswith('_exit')
                     and not inherited_matched_entry_allowed(state, self.config, plan)):
                 self.journal.event('entry_blocked', {'basket': plan['name'],

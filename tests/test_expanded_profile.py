@@ -15,8 +15,8 @@ class ExpandedProfile(unittest.TestCase):
         c['risk_limits']['committed']=100001
         with self.assertRaises(Halt): risk_limits(c)
 
-    def test_hourly_cron_and_shared_lock(self):
+    def test_half_hourly_cron_and_shared_lock(self):
         text=Path('.github/workflows/sig-management.yml').read_text()
-        self.assertIn("17 * * * *",text)
+        self.assertIn("17,47 * * * *",text)
         self.assertIn('group: sig-portfolio-execution',text)
         self.assertIn('cancel-in-progress: false',text)

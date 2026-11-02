@@ -91,6 +91,27 @@ class PlanTests(unittest.TestCase):
         p = value_plan(api, state, fair_cfg({'44': {'lo': .80, 'hi': .81, 'mid': .805, 'sources': ['kalshi']}}), RACE)
         self.assertIsNone(p)  # 10 left under the 3000 race cap can't clear min_profit
 
+    def test_stop_loss_exits_when_fair_falls_far_below_cost(self):
+        api = UniverseFake()
+        api.quantities['33'] = 100
+        state = api.state()
+        for row in state['positions']:
+            row['avgCost'] = .60
+        band = {'33': {'lo': .52, 'hi': .54, 'mid': .53, 'sources': ['kalshi']}}
+        self.assertIsNone(value_plan(api, state, fair_cfg(band), RACE))
+        p = value_plan(api, state, fair_cfg(band, stop_loss=.05), RACE)
+        self.assertEqual((p['kind'], p['exit_reason'], p['quantity']), ('value_exit', 'stop_loss', 100))
+        self.assertIsNone(value_plan(api, state, fair_cfg(band, stop_loss=.10), RACE))
+
+    def test_final_hours_blackout_blocks_entries(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        journal = Journal(str(Path(tmp.name) / 'j.sqlite')); self.addCleanup(journal.db.close)
+        cfg = fair_cfg({'33': {'lo': .70, 'hi': .71, 'mid': .705, 'sources': ['kalshi']}})
+        cfg['_universe'] = [RACE]
+        cfg['entry_blackout_hours'] = 10 ** 6
+        result = Runner(UniverseFake(), journal, cfg, live=False).cycle()
+        self.assertEqual(result[0]['decision'], 'NO_TRADE')
+
     def test_cycle_selects_and_dry_runs_value_trade(self):
         tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
         journal = Journal(str(Path(tmp.name) / 'j.sqlite')); self.addCleanup(journal.db.close)
