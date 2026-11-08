@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+private/
+*.sqlite*
+__pycache__/
+*.pyc
+.venv/
+
+# Local runtime state (the live checkpoint was removed when the repository was made public)
+.bot/
