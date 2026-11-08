@@ -1,80 +1,73 @@
-# SIG Predictions Bot
+# SIG Predictions Cup Bot
 
-A Python trading system for the SIG Predictions Cup. My objective is to find defensible election-market pricing errors while controlling exposure, execution costs and capital lockup.
+[![CI](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 
-## Hosted operation
+An automated, risk-controlled trading system I built for the **Susquehanna (SIG) Predictions Cup** — a five-week prediction-market competition on the 2026 US midterm elections. Every entrant started with 100,000 play-money "SUSQies"; the ranking was the final balance.
 
-GitHub Actions runs the portfolio manager three times per hour, at minutes 17, 37 and 57 UTC. Scheduled runs use live execution; manual runs default to dry-run and offer an explicit live option. GitHub schedules can be delayed. The system uses periodic portfolio sweeps, not continuous market monitoring.
+The system ran unattended on GitHub Actions, placed real (play-money) orders through SIG's API, and was engineered around one question: *how do you trade automatically without ever doing something you can't explain or undo?*
 
-The workflow reads the encrypted repository secret SIG_API_KEY. Credentials stay out of source files and checkpoint records. Validation runs before every portfolio review. The private repository must remain private because its checkpoint includes portfolio and execution information.
+> **Status: retired.** The competition closed on 4 Nov 2026 at 17:00 UTC. Live schedules are removed and the runner refuses to trade after the cutoff. The code is published as an engineering portfolio piece, not as a trading recommendation. See [Results](#results) and [Lessons learned](docs/LESSONS.md) — including the part that went wrong.
 
-Only one workflow invocation can execute at a time. The separate chat-based execution schedule is paused to keep a single automated execution owner.
+## Results
 
-## Execution and recovery
+| Phase | Dates | Strategy | Outcome |
+| --- | --- | --- | --- |
+| 1. Market-neutral book | 6–27 Oct | Hedged "no-lose" baskets across two dozen races | Account **$104.3k (+4.3%)** on 27 Oct, ≈ **350th of 1,795** traders (top ~19%) |
+| 2. Concentrated value bet | 28 Oct–4 Nov | Large directional positions where SIG was cheap vs. Kalshi/Polymarket | One binary outcome (Mississippi Senate) went against the position |
+| Final mark | 8 Nov | | **$86.3k (−13.7%)**; remaining markets awaiting settlement |
 
-hosted_runner.py restores the durable checkpoint in .bot/state.json into its local SQLite journal. Every order request and idempotency key is synchronously saved back to GitHub before the SIG API call. A failed checkpoint write blocks the following submission. A lost placement response retains the original request; recovery reconciles the account and replays only the identical request and key.
+The honest summary: the hedged book did what it was designed to do — small, steady, low-variance gains — and then I deliberately traded that for variance in the last week, sized it too large, and lost on a ~10% tail event. Excluding that single position the account would have finished near $111k. [docs/RESULTS.md](docs/RESULTS.md) has the numbers and the post-mortem; [docs/LESSONS.md](docs/LESSONS.md) has what I'd do differently.
 
-Unfinished jobs are always retained. Completed receipt history is bounded; earlier versions remain in Git history. Review events record screening decisions and account reconciliation. The workflow uses its short-lived GITHUB_TOKEN to update the private checkpoint.
+## How the strategy works
 
-Multi-leg submission does not guarantee complete fills. The runner checks fills, cancels resting remainders and repairs unmatched incremental positions within its repair budget. Failed repairs halt further entries. Every completed trade reconciles actual fills against the cash change.
+**Hedged baskets.** If you hold one NO share in each of *n* mutually exclusive party-winner contracts for the same race, you are paid at least *n − 1* at settlement (more if an unlisted candidate wins). Whenever the cost of the basket is below that floor — after depth, tick size and an execution-risk charge — there is a positive expected profit regardless of who wins.
 
-Set enabled to false in .bot/state.json to prevent subsequent hosted runs from trading. This takes effect on the next run; outstanding orders retain their short expirations. Disable the workflow in Actions to stop scheduled reviews entirely. Do not erase an unresolved execution checkpoint.
+**Expected-value sizing (`arb_engine.py`).** Instead of flat safety buffers, the planner computes the expected payout (including the small probability that one winner resolves two legs YES), charges execution risk estimated from the bot's own fill history (Beta-binomial prior over partial fills), and evaluates every order-book level boundary to find the depth-optimal clip.
 
-All new submissions stop at 4 November 2026, 17:00 UTC. Limits are tick-aligned and expire within 90 seconds, with 60-second repair limits. Market orders are prohibited.
+**Capital recycling.** A held basket is sold early only if proceeds beat its settlement floor discounted by the best capital-blocked opportunity, so arbs are never dumped below what they pay when capital is idle.
 
-## Pricing mechanism
+**Relative value (`value_engine.py`).** SIG prices were compared against a conservative Kalshi/Polymarket bid–ask band; legs trading outside the band by a margin are candidates. This is the component used (too aggressively) in phase 2.
 
-Equal NO holdings in n mutually exclusive party-winner contracts for the same race, stage, date and settlement pay at least n-1 under normal settlement. Unlisted winners increase the payout; the model does not assume exhaustive party coverage. Cancellation and N/A outcomes use refund rules instead.
+## Engineering highlights
 
-The hosted runner checks all configured baskets, including all 11 current holdings and the newly researched Kansas Senate pair, ranks eligible exits before additions and submits at most one new job per sweep. Whole-basket or matched partial exits require net proceeds at least equal to their normal-settlement floor. Entries require executable depth and positive profit after documented trading costs plus an extra 0.005 per share per leg. The starting clip is up to 1,000 matched shares, reduced when liquidity or risk limits bind.
+- **Durable, idempotent execution.** Every order request and idempotency key is persisted to a checkpoint *before* the API call; a failed checkpoint write blocks the next submission. A lost response is reconciled against the account and replayed only as the identical request.
+- **Fail closed.** Unknown outcomes keep their capital reserved; unverifiable holdings halt new entries; a single-owner concurrency group guarantees one executor at a time.
+- **Multi-leg safety.** Fills are checked, resting remainders cancelled and unmatched legs repaired within a loss budget; every trade reconciles fills against the cash change.
+- **Hard limits in code.** Limit orders only, tick-aligned, 90-second expiry, committed-capital / per-race / per-basket / reserve caps enforced both at planning and at submission, plus a global cutoff.
+- **Read-only research stack.** Separate collectors (`venue_scan.py`, `market_brain.py`, `research_*.py`) that cannot import the executor, used to study cross-venue pricing and exit depth.
+- **~290 offline tests** (no network, no credentials) covering checkpoint-write failure, unknown-outcome replay, duplicate prevention, partial fills, failed repairs, reserves and cash reconciliation.
 
-### Arb engine v2 (`arb_engine.py`, enabled by the `arb` config block)
+## Repository map
 
-With `arb.enabled` the planner replaces the halving search and flat buffers with an expected-value calculation:
-
-- **Expected payout per matched NO share** = (n−1) + P(unlisted winner) − P(one winner resolves two legs YES). The unlisted-winner upside is ignored (floor stays conservative); `p_double_yes` (default 0.002) charges the only loss path. Baskets that are not a clean Democratic/Republican pair, or are on the unproven list, still need the reviewed settlement proof.
-- **Execution risk from our own fills**: P(partial fill) = (partials + 1) / (jobs + 2) from the journal (Beta(1,1) prior), times twice the repair budget, charged once per job. With 0 partials in 25 jobs this is ~0.74 SUSQies per job instead of 0.005 per share per leg (10 per 1,000-share pair).
-- **Depth-optimal sizing**: profit is linear between order-book level boundaries, so every boundary is evaluated and the best robust (worst-level limit) profit wins, then shrunk to fit cash/committed/basket capacity.
-- **Universe scan**: every clean D/R race in the discovered catalog is book-prescreened in rotating chunks (`universe_races_per_sweep`), fully validated only when it shows an edge, and remembered once selected so held legs stay managed (also recovered from checkpointed jobs after a crash).
-- **Exits by opportunity cost**: a held basket is sold only if proceeds ≥ (n−1) / (1 + haircut × best capital-blocked arb ROI). With free capital that is the settlement floor, so arbs are never sold below what they pay. The legacy cost-basis profit-take (`turnover`) is bypassed in arb mode because it sells below the floor even when capital is idle.
-
-`python arb_engine.py` summarizes recorded basket quotes and fill history from `.bot/state.json`. Removing the `arb` block restores the legacy planner exactly.
-
-The fee allowance is zero based on SIG's no-participant-trading-fee documentation and the reconciled historical ledger. Every new fill/cash reconciliation independently checks that assumption.
-
-The standalone engine also supports probability sensitivity and researched directional cases. Those need timestamped sources, auditable probability ranges and at least 0.05 conservative expected profit per share after costs. The hosted workflow currently executes contract-consistency baskets; it does not autonomously collect polling, calibrate forecasts or run the paper turnover experiment.
-
-## Risk limits
-
-| Constraint | Limit |
+| Path | What it is |
 | --- | --- |
-| Total commitments including pending orders | 25,000 SUSQies |
-| Commitment per hedged basket | 5,000 |
-| Cash reserve | At least 75,000 |
-| Directional maximum loss per race | 500 |
-| Total directional maximum loss | 5,000 |
-| Shared political factor exposure | 2,000 |
-| Partial-fill repair loss budget | 10 |
+| `trading_bot.py` | API client, durable journal, planning, execution, reconciliation, risk limits |
+| `hosted_runner.py` | GitHub Actions entry point with repository-backed checkpoints |
+| `arb_engine.py` | Pure maths for basket EV, execution risk, depth-optimal sizing |
+| `value_engine.py` | Kalshi/Polymarket reference prices and relative-value rules |
+| `decision_engine.py`, `directional_model.py` | Payoff scenarios and a research-only poll-residual model (never validated for trading) |
+| `market_brain.py`, `venue_scan.py`, `cross_venue_research.py`, `research_*.py` | Read-only research and data collection |
+| `reconcile_only.py`, `exit_validation.py`, `dispatch_service.py` | Recovery, audit and scheduling utilities |
+| `bot_config.json` | Watch-list and operating controls as run on the last day |
+| `tests/`, `test_*.py` | Offline test suite |
+| `deploy/` | Alternative scheduler experiments (Apps Script, Render, systemd) |
+| `docs/design/` | Design notes for each subsystem |
+| `docs/archive/` | Raw working logs and reviews kept for transparency |
 
-Matched hedges are preserved. Price changes alone do not trigger stops on intact baskets. API requests are paced below 100 reads and 30 writes per minute per runner.
+## Running the tests
 
-## Components and validation
+Python 3.10+, standard library only.
 
-- decision_engine.py: payoff scenarios, executable depth, sensitivity and forecast evaluation.
-- trading_bot.py: reconciliation, bounded planning, fills and repair.
-- hosted_runner.py: durable GitHub checkpoints and hourly execution.
-- sig_snapshot.py: read-only exchange snapshots.
-- bot_config.json: exact contract watchlist and operating controls.
-- .github/workflows/sig-management.yml: scheduled and manual runs.
+```sh
+make test          # or: SIG_TRADING_END=2099-01-01T00:00:00+00:00 python -m unittest discover -s tests && ... -s .
+```
 
-Python 3.10 or later; standard library only. Run python -m unittest discover -s tests -v. All 39 tests pass, including checkpoint-write failure, fresh-run recovery of an unknown request, duplicate prevention, partial fills, failed repairs, reserves, contract mismatch and cash reconciliation. Tests validate implementation behavior, not trading profitability.
+`SIG_TRADING_END` is a test/replay hook: the production cutoff (4 Nov 2026) is the default, and the offline suite needs a later date to exercise trading paths after the competition. No test touches the network.
 
-For local use, provide SIG_API_KEY privately in the process environment. python trading_bot.py performs a dry-run; --live enables one execution review; --live --loop repeats hourly on a running machine. Do not run a local live loop alongside the hosted workflow.
+To dry-run against SIG you would need your own `SIG_API_KEY` in the environment (never commit it); the bot defaults to dry-run mode and now refuses to trade past the cutoff.
 
-A separate read-only hourly health review flags stale successful live sweeps after 90 minutes and cannot submit orders. A configured cron is not evidence of successful unattended execution.
+## Disclaimer
 
-Public reference review (6 October 2026): PredictionMarketTrader/openthomas illustrates calibration, settled-outcome feedback and bounded sizing; charlieyang1557/polymarket-arb illustrates cancel/fill state machines and negative execution results. Their reported venue-specific performance is not evidence of a SIG election edge. No third-party code is executed or supplied account credentials. Our existing margin-normal sensitivity engine requires a validation reference rather than treating poll vote share as win probability.
+Play-money competition; nothing here is financial advice. Past results — including the losing ones — say nothing about future performance. Parts of this repository were developed with an AI pair-programmer (Claude Code); design decisions, risk limits and the trades described above were mine.
 
-Durable checkpoints distinguish successful dry-runs from successful live sweeps; a failed run preserves the previous successful-live timestamp. The read-only health review uses that explicit heartbeat.
-
-If a held basket cannot be verified during its sweep, all new entries halt; the bot records the failed basket rather than silently treating the portfolio as fully managed.
+Released under the [MIT License](LICENSE).

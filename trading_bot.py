@@ -27,7 +27,9 @@ from turnover import dip_entry_reason, profit_exit_target
 BASE = 'https://sig.thesuper.market/api/v1'
 TID = 'bda92870-621e-47b0-bc3c-3602c5c26f55'
 SLUG = 'midterm-elections'
-END = datetime(2026, 11, 4, 17, tzinfo=timezone.utc)
+# Competition cutoff. SIG_TRADING_END is a test/replay hook so the offline suite
+# keeps running after the real cutoff; CI sets it, production never does.
+END = datetime.fromisoformat(os.environ.get('SIG_TRADING_END', '2026-11-04T17:00:00+00:00'))
 MAX_COMMITTED, RESERVE, BASKET_CAP = 25000, 75000, 5000
 DIRECTIONAL_RACE, DIRECTIONAL_TOTAL, FACTOR_CAP = 500, 5000, 2000
 # Entry quarantine from the settlement audit. Names and IDs prevent a renamed
