@@ -7,7 +7,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from dispatch_service import DispatchJournal, GitHub, tick
-from market_brain import CUTOFF
+from trading_bot import END as CUTOFF
 from test_market_brain import AT
 from trading_bot import Halt, risk_limits, basket_plan
 from tests.test_trading_bot import FakeAPI, config

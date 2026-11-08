@@ -123,7 +123,10 @@ test('owner activation validates existing single timer and uses GET-only transpo
   const vm=require('node:vm'), fs=require('node:fs');
   const methods=[], writes=[], logs=[];
   let timerCount=1, pending=false;
-  const context={console:{log:x=>logs.push(x)},
+  // Freeze the clock inside the sandbox so the test does not expire with the competition.
+  const FIXED=Date.parse('2026-10-20T12:00:00Z');
+  const FixedDate=class extends Date{constructor(...a){a.length?super(...a):super(FIXED);} static now(){return FIXED;}};
+  const context={Date:FixedDate,console:{log:x=>logs.push(x)},
     PropertiesService:{getScriptProperties:()=>({getProperty:k=>({RUN_ENABLED:'true',GITHUB_DISPATCH_TOKEN:'fixture'}[k]??null),setProperty:(k,v)=>writes.push([k,v])})},
     LockService:{getScriptLock:()=>({tryLock:()=>true,releaseLock:()=>{}})},
     ScriptApp:{getProjectTriggers:()=>Array.from({length:timerCount},()=>({getHandlerFunction:()=> 'sigFreeTick'}))},
