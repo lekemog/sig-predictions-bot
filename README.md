@@ -68,6 +68,6 @@ To dry-run against SIG you would need your own `SIG_API_KEY` in the environment 
 
 ## Disclaimer
 
-Play-money competition; nothing here is financial advice. Past results — including the losing ones — say nothing about future performance. Parts of this repository were developed with an AI pair-programmer (Claude Code); design decisions, risk limits and the trades described above were mine.
+Play-money competition; nothing here is financial advice. Past results — including the losing ones — say nothing about future performance.
 
 Released under the [MIT License](LICENSE).
